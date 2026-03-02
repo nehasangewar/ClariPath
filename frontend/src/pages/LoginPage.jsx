@@ -13,19 +13,19 @@ function LoginPage() {
   const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    try {
-      const response = await api.post('/api/auth/login', { email, password })
-      login(response.data.user, response.data.token)
-      navigate('/dashboard')
-    } catch (err) {
-      setError('Invalid email or password. Please try again.')
-    } finally {
-      setLoading(false)
-    }
+  e.preventDefault()
+  setLoading(true)
+  setError('')
+  try {
+    const response = await api.post('/api/auth/login', { email, password })
+    login(response.data.user, response.data.token)
+    navigate('/dashboard')
+  } catch (err) {
+    setError('Invalid email or password. Please try again.')
+  } finally {
+    setLoading(false)
   }
+}
 
   return (
     <div className="min-h-screen flex">
