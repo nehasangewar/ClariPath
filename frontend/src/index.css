@@ -1,0 +1,15 @@
+@import "tailwindcss";
+```
+
+---
+
+Then install recharts:
+```
+npm install recharts
+```
+
+---
+
+Then run the server:
+```
+npm run dev
