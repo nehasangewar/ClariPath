@@ -1,5 +1,6 @@
 package com.claripath.backend.auth;
 
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -8,20 +9,19 @@ public class AuthController {
 
     private final AuthService authService;
 
-    // Constructor Injection
     public AuthController(AuthService authService) {
         this.authService = authService;
     }
 
-    // ✅ Register Endpoint
     @PostMapping("/register")
-    public String register(@RequestBody RegisterRequest request) {
-        return authService.register(request);
+    public ResponseEntity<AuthResponse> register(@RequestBody RegisterRequest request) {
+        AuthResponse response = authService.register(request);
+        return ResponseEntity.ok(response);
     }
 
-    // ✅ Login Endpoint (Returns JWT Token)
     @PostMapping("/login")
-    public String login(@RequestBody LoginRequest request) {
-        return authService.login(request);
+    public ResponseEntity<AuthResponse> login(@RequestBody LoginRequest request) {
+        AuthResponse response = authService.login(request);
+        return ResponseEntity.ok(response);
     }
 }
