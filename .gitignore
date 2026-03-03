@@ -1,0 +1,18 @@
+# Application properties (contains passwords)
+backend/src/main/resources/application.properties
+
+# Node modules
+frontend/node_modules/
+
+# Build folders
+frontend/dist/
+backend/target/
+
+# Environment files
+.env
+.env.local
+
+# IDE files
+.idea/
+*.iml
+.vscode/
