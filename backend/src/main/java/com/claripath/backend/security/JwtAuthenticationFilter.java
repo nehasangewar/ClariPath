@@ -4,7 +4,6 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -12,7 +11,6 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-
 import java.io.IOException;
 
 @Component
@@ -36,9 +34,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
+        // Skip JWT check for auth endpoints
+        String path = request.getServletPath();
+        if (path.startsWith("/api/auth/")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         final String authHeader = request.getHeader("Authorization");
 
-        // ✅ If no Authorization header OR doesn't start with Bearer → skip filter
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
@@ -50,12 +54,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             userEmail = jwtService.extractEmail(jwt);
         } catch (Exception e) {
-            // If token malformed → skip authentication
             filterChain.doFilter(request, response);
             return;
         }
 
-        // If user email exists and not already authenticated
         if (userEmail != null &&
                 SecurityContextHolder.getContext().getAuthentication() == null) {
 
