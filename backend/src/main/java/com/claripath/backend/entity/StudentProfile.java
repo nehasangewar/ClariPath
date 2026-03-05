@@ -10,27 +10,35 @@ public class StudentProfile {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // One profile belongs to one user
     @OneToOne
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;
 
+    @Column(name = "full_name")
+    private String fullName;
+
     @Column(name = "career_goal")
     private String careerGoal;
+
+    @Column(name = "current_level")
+    private String currentLevel;
 
     @Column(name = "true_level")
     private String trueLevel;
 
-    @Column(name = "skip_topics")
+    @Column(name = "skip_topics", columnDefinition = "TEXT")
     private String skipTopics;
 
     @Column(name = "start_point")
     private String startPoint;
 
+    @Column(name = "status")
     private String status;
 
-    // =====================
-    // GETTERS & SETTERS
-    // =====================
+    // ==========================
+    // Getters & Setters
+    // ==========================
 
     public Long getId() {
         return id;
@@ -44,12 +52,28 @@ public class StudentProfile {
         this.user = user;
     }
 
+    public String getFullName() {
+        return fullName;
+    }
+
+    public void setFullName(String fullName) {
+        this.fullName = fullName;
+    }
+
     public String getCareerGoal() {
         return careerGoal;
     }
 
     public void setCareerGoal(String careerGoal) {
         this.careerGoal = careerGoal;
+    }
+
+    public String getCurrentLevel() {
+        return currentLevel;
+    }
+
+    public void setCurrentLevel(String currentLevel) {
+        this.currentLevel = currentLevel;
     }
 
     public String getTrueLevel() {

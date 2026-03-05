@@ -52,7 +52,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String userEmail;
 
         try {
-            userEmail = jwtService.extractEmail(jwt);
+            userEmail = jwtService.extractUsername(jwt);
         } catch (Exception e) {
             filterChain.doFilter(request, response);
             return;
