@@ -1,168 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
+import { QUESTION_OPTIONS, scoreAnswers } from '../utils/goalMapping'
 
-// ── DUMMY DATA ──
-// TODO: Replace with GET /api/career-goals?field=${field}
-const GOALS_BY_FIELD = {
-  CS: [
-    { id: 1, title: 'Software Engineer', icon: '💻', domain: 'Technology', description: 'You build software applications that millions of people use every day.', what_you_learn: 'Data structures, algorithms, Java, system design, databases, cloud', what_you_do: 'Writing code, reviewing code, solving bugs, building new features daily', salary: '6 LPA to 40 LPA', companies: 'Google, Microsoft, Amazon, Flipkart, Infosys' },
-    { id: 2, title: 'Full Stack Developer', icon: '🌐', domain: 'Technology', description: 'You build both the frontend and backend of complete web applications.', what_you_learn: 'React, Node.js, databases, APIs, deployment, HTML, CSS', what_you_do: 'Building complete web apps from design to deployment', salary: '5 LPA to 35 LPA', companies: 'Startups, Adobe, Razorpay, Swiggy' },
-    { id: 3, title: 'Data Analyst', icon: '📊', domain: 'Data', description: 'You analyse data to help companies make better decisions.', what_you_learn: 'SQL, Python, Excel, statistics, Power BI, data visualisation', what_you_do: 'Cleaning data, building dashboards, finding patterns, presenting insights', salary: '4 LPA to 25 LPA', companies: 'Deloitte, Accenture, Amazon, Zomato, KPMG' },
-    { id: 4, title: 'Data Scientist', icon: '🔬', domain: 'Data', description: 'You build models that help machines learn and make predictions.', what_you_learn: 'Python, ML algorithms, statistics, TensorFlow, data pipelines', what_you_do: 'Building prediction models, analysing large datasets, presenting findings', salary: '8 LPA to 50 LPA', companies: 'Google, Amazon, Flipkart, PhonePe, startups' },
-    { id: 5, title: 'DevOps Engineer', icon: '⚙️', domain: 'Infrastructure', description: 'You manage the systems and pipelines that keep software running.', what_you_learn: 'Linux, Docker, Kubernetes, CI/CD, AWS, monitoring tools', what_you_do: 'Automating deployments, managing servers, ensuring uptime', salary: '6 LPA to 35 LPA', companies: 'Amazon, Flipkart, Razorpay, ThoughtWorks' },
-    { id: 6, title: 'Cybersecurity Engineer', icon: '🔐', domain: 'Security', description: 'You protect systems and data from attacks and vulnerabilities.', what_you_learn: 'Networking, ethical hacking, cryptography, security tools, Linux', what_you_do: 'Finding vulnerabilities, securing systems, responding to incidents', salary: '6 LPA to 40 LPA', companies: 'TCS, Wipro, IBM, government organisations' },
-    { id: 7, title: 'Cloud Engineer', icon: '☁️', domain: 'Infrastructure', description: 'You design and manage cloud infrastructure for companies.', what_you_learn: 'AWS, Azure, GCP, networking, Terraform, cost optimisation', what_you_do: 'Setting up cloud environments, optimising costs, managing infrastructure', salary: '7 LPA to 40 LPA', companies: 'Amazon, Microsoft, Google, Deloitte' },
-    { id: 8, title: 'Mobile App Developer', icon: '📱', domain: 'Technology', description: 'You build apps for Android and iOS that people use every day.', what_you_learn: 'Flutter, React Native, Android, iOS, APIs, app deployment', what_you_do: 'Building mobile apps, fixing bugs, publishing to app stores', salary: '5 LPA to 30 LPA', companies: 'Startups, Swiggy, Zomato, PhonePe, freelancing' },
-    { id: 9, title: 'ML Engineer', icon: '🤖', domain: 'AI', description: 'You build and deploy machine learning models at scale.', what_you_learn: 'Python, ML frameworks, MLOps, data pipelines, cloud deployment', what_you_do: 'Training models, deploying them to production, monitoring performance', salary: '10 LPA to 60 LPA', companies: 'Google, Microsoft, Amazon, research labs' },
-    { id: 10, title: 'Backend Developer', icon: '🔧', domain: 'Technology', description: 'You build the server side logic and APIs that power applications.', what_you_learn: 'Java, Spring Boot, databases, REST APIs, system design', what_you_do: 'Building APIs, managing databases, optimising performance', salary: '5 LPA to 35 LPA', companies: 'Any product or service company' },
-  ],
-  IT: [
-    { id: 11, title: 'Software Engineer', icon: '💻', domain: 'Technology', description: 'You build software applications that millions of people use every day.', what_you_learn: 'Java, Python, databases, APIs, system design', what_you_do: 'Writing code, solving bugs, building features', salary: '6 LPA to 40 LPA', companies: 'TCS, Infosys, Wipro, product companies' },
-    { id: 12, title: 'Network Engineer', icon: '🌐', domain: 'Networking', description: 'You design and manage computer networks for organisations.', what_you_learn: 'Cisco, networking protocols, firewalls, VPN, cloud networking', what_you_do: 'Setting up networks, troubleshooting connectivity, managing security', salary: '4 LPA to 25 LPA', companies: 'TCS, HCL, Wipro, telecom companies' },
-    { id: 13, title: 'Database Administrator', icon: '🗄️', domain: 'Data', description: 'You manage and optimise databases that store company data.', what_you_learn: 'MySQL, Oracle, PostgreSQL, performance tuning, backup strategies', what_you_do: 'Managing databases, optimising queries, ensuring data safety', salary: '5 LPA to 28 LPA', companies: 'Banks, large enterprises, IT companies' },
-    { id: 14, title: 'IT Support Engineer', description: 'You help organisations manage their IT infrastructure and support users.', icon: '🛠️', domain: 'Support', what_you_learn: 'Hardware, OS, networking, ticketing systems, troubleshooting', what_you_do: 'Resolving technical issues, managing systems, supporting users', salary: '3 LPA to 15 LPA', companies: 'Every company with an IT department' },
-    { id: 15, title: 'Cybersecurity Analyst', icon: '🔐', domain: 'Security', description: 'You monitor and protect IT systems from threats.', what_you_learn: 'Security tools, threat analysis, SIEM, incident response', what_you_do: 'Monitoring threats, responding to incidents, securing systems', salary: '5 LPA to 30 LPA', companies: 'Banks, IT companies, government' },
-    { id: 16, title: 'Cloud Support Engineer', icon: '☁️', domain: 'Cloud', description: 'You help companies migrate and manage their cloud infrastructure.', what_you_learn: 'AWS, Azure, Linux, networking, cost management', what_you_do: 'Supporting cloud users, troubleshooting, optimising costs', salary: '5 LPA to 28 LPA', companies: 'Amazon, Microsoft, Google, IT companies' },
-    { id: 17, title: 'Full Stack Developer', icon: '🌐', domain: 'Technology', description: 'You build complete web applications from frontend to backend.', what_you_learn: 'React, Node.js, databases, APIs, deployment', what_you_do: 'Building web apps end to end', salary: '5 LPA to 35 LPA', companies: 'Startups, product companies' },
-  ],
-  Electronics: [
-    { id: 18, title: 'Embedded Systems Engineer', icon: '🔌', domain: 'Hardware', description: 'You build software that runs directly on hardware devices.', what_you_learn: 'C, microcontrollers, RTOS, circuit design, IoT protocols', what_you_do: 'Programming microcontrollers, building IoT devices, testing hardware', salary: '4 LPA to 25 LPA', companies: 'Bosch, Texas Instruments, ISRO, defence companies' },
-    { id: 19, title: 'VLSI Design Engineer', icon: '🔬', domain: 'Hardware', description: 'You design the microchips that power all electronic devices.', what_you_learn: 'Verilog, VHDL, circuit design, simulation tools, FPGA', what_you_do: 'Designing circuits, running simulations, verifying chip designs', salary: '6 LPA to 35 LPA', companies: 'Intel, Qualcomm, AMD, Samsung, NVIDIA' },
-    { id: 20, title: 'IoT Engineer', icon: '📡', domain: 'IoT', description: 'You connect physical devices to the internet and build smart systems.', what_you_learn: 'Arduino, Raspberry Pi, MQTT, cloud IoT, sensors, C', what_you_do: 'Building connected devices, managing IoT platforms, testing sensors', salary: '4 LPA to 22 LPA', companies: 'Startups, Bosch, Siemens, smart home companies' },
-    { id: 21, title: 'Signal Processing Engineer', icon: '📶', domain: 'Signal Processing', description: 'You process and analyse signals from audio, images, and sensors.', what_you_learn: 'MATLAB, Python, DSP algorithms, image processing, audio processing', what_you_do: 'Analysing signals, building filters, processing audio and images', salary: '5 LPA to 30 LPA', companies: 'Qualcomm, defence labs, ISRO, telecom' },
-    { id: 22, title: 'Robotics Engineer', icon: '🤖', domain: 'Robotics', description: 'You design and program robots and autonomous systems.', what_you_learn: 'ROS, Python, C++, sensors, control systems, computer vision', what_you_do: 'Building robots, programming motion, testing autonomous systems', salary: '5 LPA to 30 LPA', companies: 'ISRO, defence, manufacturing companies, startups' },
-    { id: 23, title: 'Hardware Design Engineer', icon: '🔧', domain: 'Hardware', description: 'You design circuit boards and electronic systems.', what_you_learn: 'PCB design, Altium, circuit analysis, component selection', what_you_do: 'Designing PCBs, testing circuits, working with manufacturers', salary: '4 LPA to 22 LPA', companies: 'Electronics companies, defence, telecom' },
-    { id: 24, title: 'Telecom Engineer', icon: '📞', domain: 'Telecom', description: 'You build and manage communication networks and systems.', what_you_learn: '5G, LTE, networking protocols, signal systems, Cisco', what_you_do: 'Managing telecom networks, optimising signal quality, supporting users', salary: '4 LPA to 20 LPA', companies: 'Jio, Airtel, Ericsson, Nokia, BSNL' },
-  ],
-  Mechanical: [
-    { id: 25, title: 'CAD Design Engineer', icon: '📐', domain: 'Design', description: 'You design mechanical parts and systems using computer software.', what_you_learn: 'AutoCAD, SolidWorks, CATIA, GD&T, manufacturing processes', what_you_do: 'Creating 3D models, drafting designs, working with manufacturing teams', salary: '3 LPA to 18 LPA', companies: 'Tata Motors, Mahindra, L&T, auto companies' },
-    { id: 26, title: 'Manufacturing Engineer', icon: '🏭', domain: 'Manufacturing', description: 'You design and optimise manufacturing processes.', what_you_learn: 'Lean manufacturing, Six Sigma, CNC, production planning, quality', what_you_do: 'Improving production lines, reducing waste, managing quality', salary: '3 LPA to 20 LPA', companies: 'Tata, Mahindra, Bajaj, manufacturing companies' },
-    { id: 27, title: 'Thermal Engineer', icon: '🌡️', domain: 'Thermal', description: 'You design systems that manage heat in engines and machines.', what_you_learn: 'Thermodynamics, CFD, ANSYS, heat transfer, fluid mechanics', what_you_do: 'Simulating heat flow, designing cooling systems, testing engines', salary: '4 LPA to 22 LPA', companies: 'ISRO, DRDO, auto companies, power plants' },
-    { id: 28, title: 'Automation Engineer', icon: '⚙️', domain: 'Automation', description: 'You automate mechanical and industrial processes.', what_you_learn: 'PLC, SCADA, robotics, pneumatics, hydraulics, Python', what_you_do: 'Programming automation systems, maintaining PLCs, reducing manual work', salary: '4 LPA to 25 LPA', companies: 'Siemens, ABB, manufacturing companies' },
-    { id: 29, title: 'Product Design Engineer', icon: '🎨', domain: 'Design', description: 'You design physical products from concept to production.', what_you_learn: 'SolidWorks, prototyping, materials science, user research, Fusion 360', what_you_do: 'Designing products, building prototypes, working with manufacturers', salary: '4 LPA to 22 LPA', companies: 'Consumer product companies, startups, design firms' },
-    { id: 30, title: 'Quality Engineer', icon: '✅', domain: 'Quality', description: 'You ensure products meet quality standards before reaching customers.', what_you_learn: 'Six Sigma, ISO standards, statistical analysis, testing methods', what_you_do: 'Inspecting products, running quality tests, writing reports', salary: '3 LPA to 18 LPA', companies: 'Any manufacturing company' },
-    { id: 31, title: 'Energy Engineer', icon: '⚡', domain: 'Energy', description: 'You design systems that generate and manage energy efficiently.', what_you_learn: 'Renewable energy systems, power plants, energy auditing, simulation', what_you_do: 'Designing energy systems, auditing consumption, optimising efficiency', salary: '4 LPA to 22 LPA', companies: 'Power companies, NTPC, solar companies, ISRO' },
-  ],
-  Civil: [
-    { id: 32, title: 'Structural Engineer', icon: '🏗️', domain: 'Structural', description: 'You design the structural framework of buildings and bridges.', what_you_learn: 'STAAD Pro, AutoCAD, structural analysis, RCC design, steel design', what_you_do: 'Designing structures, analysing loads, reviewing construction', salary: '3 LPA to 20 LPA', companies: 'L&T, construction firms, government' },
-    { id: 33, title: 'Construction Manager', icon: '👷', domain: 'Construction', description: 'You manage construction projects from start to finish.', what_you_learn: 'Project management, MS Project, contracts, budgeting, site management', what_you_do: 'Managing teams, tracking progress, ensuring quality on site', salary: '4 LPA to 25 LPA', companies: 'L&T, Shapoorji, DLF, government projects' },
-    { id: 34, title: 'Urban Planner', icon: '🏙️', domain: 'Planning', description: 'You plan cities, roads, and public infrastructure.', what_you_learn: 'GIS, AutoCAD, urban design principles, zoning laws, transport planning', what_you_do: 'Designing city layouts, planning roads, working with government', salary: '4 LPA to 22 LPA', companies: 'Government bodies, urban development authorities' },
-    { id: 35, title: 'Geotechnical Engineer', icon: '🌍', domain: 'Geotechnical', description: 'You study soil and rock to design safe foundations.', what_you_learn: 'Soil mechanics, foundation design, PLAXIS, site investigation', what_you_do: 'Testing soil, designing foundations, advising on ground conditions', salary: '3 LPA to 18 LPA', companies: 'Construction firms, government, mining' },
-    { id: 36, title: 'Environmental Engineer', icon: '🌱', domain: 'Environment', description: 'You design systems to protect the environment from pollution.', what_you_learn: 'Water treatment, waste management, environmental laws, GIS', what_you_do: 'Designing treatment plants, conducting environmental audits', salary: '3 LPA to 18 LPA', companies: 'Government, NGOs, construction companies' },
-    { id: 37, title: 'Transportation Engineer', icon: '🚗', domain: 'Transportation', description: 'You design roads, highways, and transport systems.', what_you_learn: 'Highway design, traffic analysis, AutoCAD, transport modelling', what_you_do: 'Designing roads, analysing traffic, planning transport networks', salary: '3 LPA to 20 LPA', companies: 'NHAI, government, construction firms' },
-    { id: 38, title: 'Water Resources Engineer', icon: '💧', domain: 'Water', description: 'You design systems to manage water supply and floods.', what_you_learn: 'Hydraulics, hydrology, dam design, irrigation systems, GIS', what_you_do: 'Designing dams, managing water supply, flood analysis', salary: '3 LPA to 18 LPA', companies: 'Government, irrigation departments, NGOs' },
-  ],
-  Management: [
-    { id: 39, title: 'Product Manager', icon: '📋', domain: 'Product', description: 'You decide what gets built and why in a tech company.', what_you_learn: 'Product thinking, roadmapping, user research, data analysis, agile', what_you_do: 'Defining features, working with engineers, tracking metrics', salary: '8 LPA to 50 LPA', companies: 'Any product company, startups' },
-    { id: 40, title: 'Business Analyst', icon: '📈', domain: 'Business', description: 'You bridge the gap between business needs and technology solutions.', what_you_learn: 'Requirements gathering, SQL, Excel, process mapping, stakeholder management', what_you_do: 'Analysing business problems, writing requirements, coordinating teams', salary: '5 LPA to 28 LPA', companies: 'Consulting firms, banks, IT companies' },
-    { id: 41, title: 'Project Manager', icon: '🗂️', domain: 'Management', description: 'You lead projects and teams to deliver results on time.', what_you_learn: 'PMP, agile, budgeting, risk management, MS Project', what_you_do: 'Planning projects, managing teams, tracking deadlines, reporting', salary: '6 LPA to 35 LPA', companies: 'Any large company or consulting firm' },
-    { id: 42, title: 'Operations Manager', icon: '⚙️', domain: 'Operations', description: 'You optimise the day to day operations of a company.', what_you_learn: 'Process improvement, Six Sigma, supply chain, ERP systems', what_you_do: 'Improving processes, managing resources, reducing costs', salary: '5 LPA to 30 LPA', companies: 'Manufacturing, ecommerce, logistics companies' },
-    { id: 43, title: 'Marketing Analyst', icon: '📣', domain: 'Marketing', description: 'You analyse marketing data to improve campaigns and growth.', what_you_learn: 'Google Analytics, SQL, Excel, A/B testing, digital marketing', what_you_do: 'Analysing campaign performance, finding growth opportunities', salary: '4 LPA to 22 LPA', companies: 'Any consumer company, startups, agencies' },
-    { id: 44, title: 'Supply Chain Manager', icon: '🚚', domain: 'Supply Chain', description: 'You manage the flow of goods from supplier to customer.', what_you_learn: 'SAP, logistics, inventory management, supplier relations', what_you_do: 'Managing suppliers, optimising delivery, reducing costs', salary: '5 LPA to 28 LPA', companies: 'Amazon, Flipkart, manufacturing, retail' },
-    { id: 45, title: 'HR Manager', icon: '👥', domain: 'Human Resources', description: 'You manage people, hiring, and culture in an organisation.', what_you_learn: 'HR policies, recruitment, performance management, labour laws', what_you_do: 'Hiring talent, managing employee relations, building culture', salary: '4 LPA to 22 LPA', companies: 'Every company' },
-  ],
-  Other: [
-    { id: 46, title: 'Software Engineer', icon: '💻', domain: 'Technology', description: 'You build software applications that millions of people use.', what_you_learn: 'Programming, data structures, algorithms, system design', what_you_do: 'Writing code, solving problems, building products', salary: '6 LPA to 40 LPA', companies: 'Any tech company' },
-    { id: 47, title: 'Data Analyst', icon: '📊', domain: 'Data', description: 'You analyse data to help companies make better decisions.', what_you_learn: 'SQL, Excel, Python, statistics, data visualisation', what_you_do: 'Cleaning data, building dashboards, presenting insights', salary: '4 LPA to 25 LPA', companies: 'Any data driven company' },
-    { id: 48, title: 'UX Designer', icon: '🎨', domain: 'Design', description: 'You design how products look and feel to users.', what_you_learn: 'Figma, user research, wireframing, prototyping, design systems', what_you_do: 'Designing interfaces, conducting user research, building prototypes', salary: '5 LPA to 30 LPA', companies: 'Any product company, design agencies' },
-    { id: 49, title: 'Digital Marketer', icon: '📣', domain: 'Marketing', description: 'You grow businesses through online marketing channels.', what_you_learn: 'SEO, social media, Google Ads, content marketing, analytics', what_you_do: 'Running campaigns, growing traffic, measuring results', salary: '3 LPA to 20 LPA', companies: 'Any consumer company, agencies, freelancing' },
-    { id: 50, title: 'Content Creator', icon: '✍️', domain: 'Content', description: 'You create written, video, or audio content for audiences.', what_you_learn: 'Writing, video editing, SEO, social media strategy, storytelling', what_you_do: 'Creating content, growing audiences, working with brands', salary: '2 LPA to 20 LPA', companies: 'Media companies, freelancing, own channel' },
-    { id: 51, title: 'Entrepreneur', icon: '🚀', domain: 'Business', description: 'You build your own business from scratch.', what_you_learn: 'Business model design, fundraising, marketing, product, operations', what_you_do: 'Building a product, finding customers, growing a team', salary: 'Variable — 0 to unlimited', companies: 'Your own company' },
-    { id: 52, title: 'Finance Analyst', icon: '💰', domain: 'Finance', description: 'You analyse financial data to help companies make investment decisions.', what_you_learn: 'Excel, financial modelling, valuation, accounting, Bloomberg', what_you_do: 'Building financial models, analysing investments, writing reports', salary: '5 LPA to 35 LPA', companies: 'Banks, investment firms, consulting' },
-  ],
-}
 
-// TODO: Replace with GET /api/onboarding/questions?field=${field}&type=DISCOVERY
-const DISCOVERY_QUESTIONS_BY_FIELD = {
-  CS: [
-    'When you picture yourself working in tech 5 years from now, what are you doing?',
-    'Do you prefer building things people use or finding patterns in data?',
-    'Are you more excited by frontend — what users see — or backend — how things work?',
-    'How comfortable are you writing code every single day as your primary job?',
-    'Would you rather build a product, secure a system, or analyse data?',
-    'Do you enjoy working with databases and information systems?',
-    'Are you interested in how large systems like Google or Amazon work internally?',
-    'Do you prefer working on one deep technical problem or managing multiple things?',
-    'How do you feel about cloud platforms like AWS or Azure?',
-    'What excites you more — creating something new or optimising something existing?',
-  ],
-  IT: [
-    'Do you prefer managing systems or building new software?',
-    'Are you interested in how networks and servers work?',
-    'Would you rather support users or build tools for them?',
-    'How comfortable are you with hardware and operating systems?',
-    'Do you enjoy troubleshooting and solving infrastructure problems?',
-    'Are you interested in cybersecurity and protecting systems?',
-    'Would you rather work with databases or with networks?',
-    'Do you prefer working in a structured enterprise environment or a startup?',
-    'How comfortable are you with cloud platforms?',
-    'What matters more to you — reliability of systems or speed of development?',
-  ],
-  Electronics: [
-    'Do you prefer working with hardware or writing software?',
-    'Are you more interested in circuits or in the systems they power?',
-    'Would you rather design a chip or build a robot?',
-    'How comfortable are you with programming microcontrollers?',
-    'Do you enjoy working with sensors and physical devices?',
-    'Are you interested in communication systems like 5G or satellite?',
-    'Would you rather work in a lab or at a manufacturing site?',
-    'How do you feel about simulation tools like MATLAB or ANSYS?',
-    'Are you interested in IoT and connecting devices to the internet?',
-    'What excites you more — defence and space or consumer electronics?',
-  ],
-  Mechanical: [
-    'Do you prefer designing products or managing their production?',
-    'Are you more interested in thermal systems or structural design?',
-    'Would you rather work on automobiles, aircraft, or industrial machines?',
-    'How comfortable are you with CAD tools like SolidWorks or AutoCAD?',
-    'Do you enjoy analysing forces, heat, or fluid flow?',
-    'Are you interested in automation and robotics?',
-    'Would you rather work on product design or quality control?',
-    'How do you feel about working on manufacturing shop floors?',
-    'Are you interested in renewable energy and sustainable systems?',
-    'What matters more to you — precision engineering or innovation?',
-  ],
-  Civil: [
-    'Do you prefer designing structures or managing construction projects?',
-    'Are you more interested in buildings, roads, or water systems?',
-    'Would you rather work in urban planning or environmental engineering?',
-    'How comfortable are you with tools like AutoCAD or STAAD Pro?',
-    'Do you enjoy working on site or in an office doing design work?',
-    'Are you interested in sustainable and green construction?',
-    'Would you rather work for the government or a private company?',
-    'How do you feel about geotechnical and foundation work?',
-    'Are you interested in transportation and highway design?',
-    'What matters more to you — large infrastructure projects or detailed design work?',
-  ],
-  Management: [
-    'Do you prefer leading people or analysing data to make decisions?',
-    'Are you more interested in product strategy or business operations?',
-    'Would you rather work in a startup or a large corporation?',
-    'How comfortable are you with data and numbers in your decision making?',
-    'Do you enjoy understanding customer behaviour and market trends?',
-    'Are you interested in finance and investment analysis?',
-    'Would you rather manage projects or manage people?',
-    'How do you feel about working with multiple teams and stakeholders?',
-    'Are you interested in supply chain and logistics?',
-    'What matters more to you — growth and revenue or process and efficiency?',
-  ],
-  Other: [
-    'When you picture yourself working 5 years from now, what are you doing?',
-    'Do you prefer technical work or creative work?',
-    'Are you more energised by solving problems or communicating ideas?',
-    'Would you rather build something, analyse something, or manage something?',
-    'How comfortable are you with technology in your day to day work?',
-    'Do you prefer working with data, people, or products?',
-    'Are you interested in starting your own business someday?',
-    'Would you rather work for a large company or a small startup?',
-    'How important is creativity in the work you want to do?',
-    'What matters more to you — stability or high growth potential?',
-  ],
-}
 
-const FIELDS = ['CS', 'IT', 'Electronics', 'Mechanical', 'Civil', 'Management', 'Other']
-const BRANCHES = ['Computer Science', 'Information Technology', 'Electronics', 'Mechanical', 'Civil', 'Management', 'Other']
+const FIELDS = ['CSE', 'IT', 'Electronics', 'Mechanical', 'Civil', 'Electrical', 'AI_ML']
+const BRANCHES = ['Computer Science', 'Information Technology', 'Electronics', 'Mechanical', 'Civil', 'Electrical', 'AI/ML']
 const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8]
 const CLARITY_OPTIONS = [
   { value: 'yes', label: 'Yes, I know exactly what I want' },
@@ -180,7 +24,7 @@ export default function OnboardingPage() {
   const [clarity, setClarity] = useState('')
   const [selectedField, setSelectedField] = useState('')
   const [currentQ, setCurrentQ] = useState(0)
-  const [answers, setAnswers] = useState({})
+  const [answers, setAnswers] = useState({}) // stores { 0: 'A', 1: 'C', ... }
   const [currentAnswer, setCurrentAnswer] = useState('')
   const [detailGoal, setDetailGoal] = useState(null)
   const [confirmedGoal, setConfirmedGoal] = useState(null)
@@ -189,8 +33,8 @@ export default function OnboardingPage() {
   const [assessAnswers, setAssessAnswers] = useState({})
   const [loadingMessage, setLoadingMessage] = useState('')
 
-  const goals = GOALS_BY_FIELD[selectedField] || []
-  const questions = DISCOVERY_QUESTIONS_BY_FIELD[selectedField] || []
+  const [goals, setGoals] = useState([])
+const [questions, setQuestions] = useState([])
   const totalQuestions = clarity === 'yes' ? 0 : clarity === 'maybe' ? 5 : 10
   const visibleQuestions = questions.slice(0, totalQuestions)
 
@@ -303,18 +147,30 @@ export default function OnboardingPage() {
   )
 
   // ── HANDLERS ──
-  const handleIntroNext = () => {
-    if (!branch || !semester || !clarity) return
-    const field = interestedOtherField || branch
-    setSelectedField(field)
-    if (clarity === 'yes') {
-      setScreen('goals')
-    } else {
-      setCurrentQ(0)
-      setScreen('questions')
-    }
+  const handleIntroNext = async () => {
+  if (!branch || !semester || !clarity) return
+  const field = interestedOtherField || branch
+  setSelectedField(field)
+
+  // TODO: already fetching from real API below
+  try {
+    const [goalsRes, questionsRes] = await Promise.all([
+      api.get(`/api/career-goals?field=${field}`),
+      api.get(`/api/onboarding/questions?field=${field}`)
+    ])
+    setGoals(goalsRes.data)
+    setQuestions(questionsRes.data.map(q => q.questionText))
+  } catch (err) {
+    console.error('Failed to load data', err)
   }
 
+  if (clarity === 'yes') {
+    setScreen('goals')
+  } else {
+    setCurrentQ(0)
+    setScreen('questions')
+  }
+}
   const handleAnswerNext = () => {
     if (!currentAnswer.trim()) return
     const updated = { ...answers, [currentQ]: currentAnswer }
@@ -618,35 +474,59 @@ if (screen === 'welcome') return (
     </div>
   )
 
-  // ── SCREEN: QUESTIONS ──
   if (screen === 'questions') {
-    const pct = (currentQ / visibleQuestions.length) * 100
-    return (
-      <div style={bg}>
-        <div style={card}>
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            {progressBar(pct)}
-            <h2 style={{ ...title, fontSize: 19, marginBottom: 28, lineHeight: 1.5 }}>
-              {visibleQuestions[currentQ]}
-            </h2>
-            <textarea value={currentAnswer} onChange={e => setCurrentAnswer(e.target.value)}
-              placeholder="Type your answer here..." rows={4} style={inputStyle}
-              onFocus={e => e.target.style.borderColor = 'rgba(59,130,246,0.5)'}
-              onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.08)'} />
-            <button onClick={handleAnswerNext} style={currentAnswer.trim() ? btn : btnOff} disabled={!currentAnswer.trim()}>
-              {currentQ + 1 >= visibleQuestions.length ? 'See My Career Matches →' : 'Next →'}
-            </button>
-            {currentQ > 0 && (
-              <button onClick={() => { setCurrentQ(currentQ - 1); setCurrentAnswer(answers[currentQ - 1] || '') }}
-                style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid rgba(255,255,255,0.07)', background: 'transparent', color: 'rgba(255,255,255,0.35)', fontSize: 13, cursor: 'pointer', marginTop: 8 }}>
-                ← Back
+  const pct = (currentQ / visibleQuestions.length) * 100
+  const opts = QUESTION_OPTIONS[selectedField]?.[currentQ] || {}
+  return (
+    <div style={bg}>
+      <div style={card}>
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          {progressBar(pct)}
+          <h2 style={{ ...title, fontSize: 18, marginBottom: 24, lineHeight: 1.5 }}>
+            {visibleQuestions[currentQ]}
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
+            {Object.entries(opts).map(([letter, text]) => (
+              <button key={letter}
+                onClick={() => {
+                  const updated = { ...answers, [currentQ]: letter }
+                  setAnswers(updated)
+                  if (currentQ + 1 >= visibleQuestions.length) {
+                    const scored = scoreAnswers(selectedField, updated, goals)
+                    setGoals(scored)
+                    setScreen('goals')
+                  } else {
+                    setCurrentQ(currentQ + 1)
+                  }
+                }}
+                style={{
+                  padding: '14px 18px',
+                  borderRadius: 12,
+                  border: `1.5px solid ${answers[currentQ] === letter ? 'rgba(59,130,246,0.6)' : 'rgba(255,255,255,0.07)'}`,
+                  background: answers[currentQ] === letter ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.02)',
+                  color: answers[currentQ] === letter ? '#60a5fa' : 'rgba(255,255,255,0.65)',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.2s',
+                }}>
+                <span style={{ fontWeight: 700, marginRight: 10, color: answers[currentQ] === letter ? '#60a5fa' : 'rgba(255,255,255,0.35)' }}>{letter}.</span>
+                {text}
               </button>
-            )}
+            ))}
           </div>
+          {currentQ > 0 && (
+            <button onClick={() => setCurrentQ(currentQ - 1)}
+              style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid rgba(255,255,255,0.07)', background: 'transparent', color: 'rgba(255,255,255,0.35)', fontSize: 13, cursor: 'pointer' }}>
+              ← Back
+            </button>
+          )}
         </div>
       </div>
-    )
-  }
+    </div>
+  )
+}
 
   // ── SCREEN: GOALS ──
   if (screen === 'goals') return (
@@ -677,14 +557,21 @@ if (screen === 'welcome') return (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                   <div style={{ width: 46, height: 46, borderRadius: 12, background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, border: '1px solid rgba(255,255,255,0.06)' }}>
-                    {goal.icon}
+                    {goal.icon || '🎯'}
                   </div>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
                       <span style={{ fontSize: 15, fontWeight: 700, color: 'white' }}>{goal.title}</span>
                       {i === 0 && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.25)' }}>TOP MATCH</span>}
                     </div>
-                    <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>{goal.domain}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+  {goal.matchPercent > 0 && (
+    <span style={{ fontSize: 13, fontWeight: 700, color: i === 0 ? '#60a5fa' : 'rgba(255,255,255,0.5)' }}>
+      {goal.matchPercent}%
+    </span>
+  )}
+  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>Tap to explore →</span>
+</div>
                   </div>
                 </div>
                 <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>Tap to explore →</span>
