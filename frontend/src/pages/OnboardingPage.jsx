@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { QUESTION_OPTIONS, scoreAnswers } from '../utils/goalMapping'
 
-
-
 const FIELDS = ['CSE', 'IT', 'Electronics', 'Mechanical', 'Civil', 'Electrical', 'AI_ML']
 const BRANCHES = ['Computer Science', 'Information Technology', 'Electronics', 'Mechanical', 'Civil', 'Electrical', 'AI/ML']
 const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8]
@@ -13,6 +11,42 @@ const CLARITY_OPTIONS = [
   { value: 'maybe', label: 'I have some idea but not sure' },
   { value: 'no', label: 'I have no idea yet' },
 ]
+
+const C = {
+  bg: '#f5f0e8',
+  bgAlt: '#ede8df',
+  bgDeep: '#e8e0d0',
+  text: '#1c1917',
+  textMid: '#44403c',
+  textLight: '#78716c',
+  gold: '#b45309',
+  goldLight: '#d97706',
+  goldBg: '#fef3c7',
+  goldBorder: '#fcd34d',
+  border: '#e5ddd0',
+  white: '#ffffff',
+  cardBg: '#faf7f2',
+}
+
+function DetailCard({ icon, label, value, C, highlight }) {
+  if (!value) return null;
+  return (
+    <div style={{ background: highlight ? C.goldBg : C.white,
+      border: `1px solid ${highlight ? C.goldBorder : C.border}`,
+      borderRadius: 16, padding: '16px 18px',
+      boxShadow: '0 1px 6px rgba(0,0,0,0.04)' }}>
+      <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 12, fontWeight: 600,
+        color: C.gold, textTransform: 'uppercase',
+        letterSpacing: 1, margin: '0 0 8px' }}>
+        {icon} {label}
+      </p>
+      <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 14,
+        color: highlight ? C.gold : C.textMid, lineHeight: 1.6, margin: 0, fontWeight: highlight ? 700 : 400 }}>
+        {value}
+      </p>
+    </div>
+  );
+}
 
 export default function OnboardingPage() {
   const navigate = useNavigate()
@@ -24,7 +58,7 @@ export default function OnboardingPage() {
   const [clarity, setClarity] = useState('')
   const [selectedField, setSelectedField] = useState('')
   const [currentQ, setCurrentQ] = useState(0)
-  const [answers, setAnswers] = useState({}) // stores { 0: 'A', 1: 'C', ... }
+  const [answers, setAnswers] = useState({})
   const [currentAnswer, setCurrentAnswer] = useState('')
   const [detailGoal, setDetailGoal] = useState(null)
   const [confirmedGoal, setConfirmedGoal] = useState(null)
@@ -32,67 +66,73 @@ export default function OnboardingPage() {
   const [generatedQuestions, setGeneratedQuestions] = useState([])
   const [assessAnswers, setAssessAnswers] = useState({})
   const [loadingMessage, setLoadingMessage] = useState('')
-
   const [goals, setGoals] = useState([])
-const [questions, setQuestions] = useState([])
+  const [questions, setQuestions] = useState([])
+
   const totalQuestions = clarity === 'yes' ? 0 : clarity === 'maybe' ? 5 : 10
   const visibleQuestions = questions.slice(0, totalQuestions)
 
-  // ── STYLES ──
-  const bg = {
+  // ── SHARED STYLES ──
+  const pageBg = {
     minHeight: '100vh',
-    background: '#04080f',
-    fontFamily: 'system-ui, sans-serif',
+    background: C.bg,
+    fontFamily: "'DM Sans', system-ui, sans-serif",
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     padding: '24px',
+    position: 'relative',
+    overflow: 'hidden',
   }
 
   const card = {
     width: '100%',
     maxWidth: 560,
-    background: 'rgba(255,255,255,0.03)',
-    border: '1px solid rgba(255,255,255,0.08)',
+    background: C.white,
+    border: `1px solid ${C.border}`,
     borderRadius: 24,
     padding: '40px 36px',
     position: 'relative',
     overflow: 'hidden',
+    boxShadow: '0 8px 40px rgba(0,0,0,0.07)',
   }
 
   const title = {
     fontSize: 24,
     fontWeight: 900,
-    color: 'white',
+    color: C.text,
     marginBottom: 8,
     letterSpacing: '-0.02em',
+    fontFamily: "'Playfair Display', Georgia, serif",
   }
 
   const subtitle = {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.4)',
-    marginBottom: 32,
-    lineHeight: 1.6,
+    color: C.textLight,
+    marginBottom: 28,
+    lineHeight: 1.65,
   }
 
   const btn = {
     width: '100%',
-    padding: '14px',
+    padding: '13px',
     borderRadius: 12,
     border: 'none',
-    background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+    background: 'linear-gradient(135deg, #b45309, #d97706)',
     color: 'white',
     fontWeight: 700,
     fontSize: 14,
     cursor: 'pointer',
     marginTop: 8,
-    boxShadow: '0 0 20px rgba(59,130,246,0.2)',
+    boxShadow: '0 4px 18px rgba(180,83,9,0.28)',
+    transition: 'all 0.25s ease',
+    fontFamily: "'DM Sans', sans-serif",
   }
 
   const btnOff = {
     ...btn,
-    background: 'rgba(255,255,255,0.06)',
-    color: 'rgba(255,255,255,0.25)',
+    background: C.bgAlt,
+    color: C.textLight,
     cursor: 'not-allowed',
     boxShadow: 'none',
   }
@@ -100,86 +140,99 @@ const [questions, setQuestions] = useState([])
   const inputStyle = {
     width: '100%',
     boxSizing: 'border-box',
-    padding: '14px 16px',
+    padding: '12px 16px',
     borderRadius: 12,
-    border: '1.5px solid rgba(255,255,255,0.08)',
-    background: 'rgba(255,255,255,0.04)',
-    color: 'white',
+    border: `1.5px solid ${C.border}`,
+    background: C.white,
+    color: C.text,
     fontSize: 14,
     outline: 'none',
     resize: 'none',
     lineHeight: 1.6,
+    fontFamily: "'DM Sans', sans-serif",
+    transition: 'border-color 0.2s, box-shadow 0.2s',
   }
 
   const labelStyle = {
     display: 'block',
     fontSize: 13,
     fontWeight: 600,
-    color: 'rgba(255,255,255,0.55)',
+    color: C.textMid,
     marginBottom: 10,
   }
 
   const optionBtn = (selected) => ({
     padding: '11px 16px',
     borderRadius: 10,
-    border: `1.5px solid ${selected ? 'rgba(59,130,246,0.6)' : 'rgba(255,255,255,0.07)'}`,
-    background: selected ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.02)',
-    color: selected ? '#60a5fa' : 'rgba(255,255,255,0.45)',
+    border: `1.5px solid ${selected ? C.gold + '60' : C.border}`,
+    background: selected ? C.goldBg : C.white,
+    color: selected ? C.gold : C.textMid,
     fontSize: 13,
     fontWeight: 600,
     cursor: 'pointer',
     textAlign: 'left',
     transition: 'all 0.2s',
+    fontFamily: "'DM Sans', sans-serif",
   })
 
-  const progressBar = (pct, color = 'linear-gradient(90deg, #3b82f6, #8b5cf6)') => (
-    <div style={{ marginBottom: 32 }}>
+  const progressBar = (pct) => (
+    <div style={{ marginBottom: 28 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>
+        <span style={{ fontSize: 12, color: C.textLight }}>
           Question {currentQ + 1} of {visibleQuestions.length || 7}
         </span>
-        <span style={{ fontSize: 12, color: '#60a5fa' }}>{Math.round(pct)}%</span>
+        <span style={{ fontSize: 12, color: C.gold, fontWeight: 600 }}>{Math.round(pct)}%</span>
       </div>
-      <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 4, transition: 'width 0.4s ease' }} />
+      <div style={{ height: 5, background: C.bgAlt, borderRadius: 4, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: `linear-gradient(90deg, ${C.gold}, ${C.goldLight})`, borderRadius: 4, transition: 'width 0.4s ease' }} />
       </div>
     </div>
   )
 
+  // ── BACKGROUND DECORATION (shared) ──
+  const BgDecor = () => (
+    <>
+      <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse at 15% 40%, rgba(251,191,36,0.14) 0%, transparent 50%), radial-gradient(ellipse at 85% 30%, rgba(180,83,9,0.08) 0%, transparent 45%)` }} />
+      <div style={{ position: 'absolute', inset: 0, backgroundImage: `radial-gradient(rgba(180,83,9,0.08) 1px, transparent 1px)`, backgroundSize: '40px 40px', maskImage: 'radial-gradient(ellipse at center, black 0%, transparent 75%)' }} />
+      {/* Center orbit */}
+      <div style={{ position: 'absolute', top: '50%', left: '50%', width: 500, height: 500, marginTop: -250, marginLeft: -250, borderRadius: '50%', border: '1.5px solid rgba(180,83,9,0.12)', animation: 'spin-slow 40s linear infinite', pointerEvents: 'none' }}>
+        <div style={{ position: 'absolute', top: -7, left: '50%', transform: 'translateX(-50%)', width: 13, height: 13, borderRadius: '50%', background: 'radial-gradient(circle, #fde68a 20%, #b45309)', boxShadow: '0 0 14px #d97706' }} />
+        <div style={{ position: 'absolute', bottom: -5, left: '50%', transform: 'translateX(-50%)', width: 8, height: 8, borderRadius: '50%', background: '#d97706', boxShadow: '0 0 10px rgba(217,119,6,0.5)' }} />
+      </div>
+      <div style={{ position: 'absolute', top: '50%', left: '50%', width: 340, height: 340, marginTop: -170, marginLeft: -170, borderRadius: '50%', border: '1px dashed rgba(180,83,9,0.08)', animation: 'spin-slow-reverse 55s linear infinite', pointerEvents: 'none' }}>
+        <div style={{ position: 'absolute', top: '50%', left: -5, transform: 'translateY(-50%)', width: 9, height: 9, borderRadius: '50%', background: 'radial-gradient(circle, #c4b5fd 20%, #7c3aed)', boxShadow: '0 0 10px rgba(124,58,237,0.5)' }} />
+      </div>
+      {/* Top-right orbit */}
+      <div style={{ position: 'absolute', top: '2%', right: '3%', width: 240, height: 240, borderRadius: '50%', border: '1.5px solid rgba(180,83,9,0.14)', animation: 'spin-slow 30s linear infinite', pointerEvents: 'none' }}>
+        <div style={{ position: 'absolute', top: -6, left: '50%', transform: 'translateX(-50%)', width: 12, height: 12, borderRadius: '50%', background: 'radial-gradient(circle, #fde68a 20%, #b45309)', boxShadow: '0 0 12px #d97706' }} />
+        <div style={{ position: 'absolute', top: '50%', right: -5, transform: 'translateY(-50%)', width: 7, height: 7, borderRadius: '50%', background: '#f59e0b', boxShadow: '0 0 8px rgba(245,158,11,0.5)' }} />
+      </div>
+      <div style={{ position: 'absolute', top: 'calc(2% + 38px)', right: 'calc(3% + 38px)', width: 164, height: 164, borderRadius: '50%', border: '1px dashed rgba(124,58,237,0.12)', animation: 'spin-slow-reverse 22s linear infinite', pointerEvents: 'none' }}>
+        <div style={{ position: 'absolute', top: -5, left: '50%', transform: 'translateX(-50%)', width: 9, height: 9, borderRadius: '50%', background: 'radial-gradient(circle, #ddd6fe 20%, #7c3aed)', boxShadow: '0 0 10px rgba(124,58,237,0.5)' }} />
+      </div>
+    </>
+  )
+
   // ── HANDLERS ──
   const handleIntroNext = async () => {
-  if (!branch || !semester || !clarity) return
-  const field = interestedOtherField || branch
-  setSelectedField(field)
-
-  // TODO: already fetching from real API below
-  try {
-    const [goalsRes, questionsRes] = await Promise.all([
-      api.get(`/api/career-goals?field=${field}`),
-      api.get(`/api/onboarding/questions?field=${field}`)
-    ])
-    setGoals(goalsRes.data)
-    setQuestions(questionsRes.data.map(q => q.questionText))
-  } catch (err) {
-    console.error('Failed to load data', err)
-  }
-
-  if (clarity === 'yes') {
-    setScreen('goals')
-  } else {
-    setCurrentQ(0)
-    setScreen('questions')
-  }
-}
-  const handleAnswerNext = () => {
-    if (!currentAnswer.trim()) return
-    const updated = { ...answers, [currentQ]: currentAnswer }
-    setAnswers(updated)
-    setCurrentAnswer('')
-    if (currentQ + 1 >= visibleQuestions.length) {
+    if (!branch || !semester || !clarity) return
+    const field = interestedOtherField || branch
+    setSelectedField(field)
+    try {
+      const [goalsRes, questionsRes] = await Promise.all([
+        api.get(`/api/career-goals?field=${field}`),
+        api.get(`/api/onboarding/questions?field=${field}`)
+      ])
+      setGoals(goalsRes.data)
+      setQuestions(questionsRes.data.map(q => q.questionText))
+    } catch (err) {
+      console.error('Failed to load data', err)
+    }
+    if (clarity === 'yes') {
       setScreen('goals')
     } else {
-      setCurrentQ(currentQ + 1)
+      setCurrentQ(0)
+      setScreen('questions')
     }
   }
 
@@ -192,15 +245,6 @@ const [questions, setQuestions] = useState([])
     if (!whatYouKnow.trim()) return
     setLoadingMessage('Generating your personalised assessment questions...')
     setScreen('loading')
-
-    // TODO: Replace with POST /api/onboarding/generate-questions
-    // const res = await api.post('/api/onboarding/generate-questions', {
-    //   careerGoal: confirmedGoal.title,
-    //   whatYouKnow: whatYouKnow
-    // })
-    // setGeneratedQuestions(res.data.questions)
-
-    // DUMMY questions for now
     setTimeout(() => {
       setGeneratedQuestions([
         `You mentioned some background — what specific ${confirmedGoal?.title} concepts are you most confident about?`,
@@ -222,359 +266,299 @@ const [questions, setQuestions] = useState([])
     const updated = { ...assessAnswers, [currentQ]: currentAnswer }
     setAssessAnswers(updated)
     setCurrentAnswer('')
-
     if (currentQ + 1 >= generatedQuestions.length) {
       setLoadingMessage('Building your personalised roadmap...')
       setScreen('loading')
-
-      // TODO: Replace with POST /api/onboarding/generate-roadmap
-      // const res = await api.post('/api/onboarding/generate-roadmap', {
-      //   branch: branch,
-      //   semester: semester,
-      //   clarityAnswer: clarity,
-      //   discoveryAnswers: Object.values(answers),
-      //   confirmedGoal: confirmedGoal.title,
-      //   whatYouKnow: whatYouKnow,
-      //   assessmentQuestions: generatedQuestions,
-      //   assessmentAnswers: Object.values(updated),
-      // })
-
       setTimeout(() => navigate('/dashboard'), 3500)
     } else {
       setCurrentQ(currentQ + 1)
     }
   }
 
+  const sharedStyle = `
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@700;800;900&display=swap');
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes spin-slow-reverse { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+    @keyframes drift { 0%,100%{transform:translate(0,0)} 33%{transform:translate(12px,-10px)} 66%{transform:translate(-8px,8px)} }
+    @keyframes shimmer-gold { 0%{background-position:-200% center} 100%{background-position:200% center} }
+    @keyframes fadeInUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+    .playfair { font-family: 'Playfair Display', Georgia, serif; }
+    .gold-text {
+      background: linear-gradient(135deg, #b45309, #d97706, #f59e0b, #d97706, #b45309);
+      background-size: 300% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: shimmer-gold 4s linear infinite;
+    }
+    .ob-input:focus { border-color: #b45309 !important; box-shadow: 0 0 0 3px rgba(180,83,9,0.1) !important; }
+    .ob-option:hover { border-color: rgba(180,83,9,0.4) !important; background: #fef9f0 !important; }
+    .ob-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(180,83,9,0.35) !important; }
+    .goal-card:hover { border-color: rgba(180,83,9,0.4) !important; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.08) !important; }
+    textarea::placeholder, input::placeholder { color: #a8a29e; }
+  `
+
   // ── SCREEN: WELCOME ──
-if (screen === 'welcome') return (
-  <div style={{
-    minHeight: '100vh',
-    background: '#04080f',
-    fontFamily: 'system-ui, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '24px',
-    position: 'relative',
-    overflow: 'hidden',
-  }}>
+  if (screen === 'welcome') return (
+    <div style={{ ...pageBg, alignItems: 'center' }}>
+      <style>{sharedStyle}</style>
+      <BgDecor />
 
-    {/* Animated background orbs */}
-    <div style={{ position: 'absolute', top: '-10%', left: '-5%', width: 500, height: 500, borderRadius: '50%', background: 'radial-gradient(circle, rgba(59,130,246,0.08), transparent 70%)', filter: 'blur(60px)', animation: 'pulse1 8s ease-in-out infinite', pointerEvents: 'none' }} />
-    <div style={{ position: 'absolute', bottom: '-10%', right: '-5%', width: 600, height: 600, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139,92,246,0.08), transparent 70%)', filter: 'blur(60px)', animation: 'pulse2 10s ease-in-out infinite', pointerEvents: 'none' }} />
-    <div style={{ position: 'absolute', top: '40%', left: '50%', transform: 'translate(-50%,-50%)', width: 800, height: 800, borderRadius: '50%', background: 'radial-gradient(circle, rgba(6,182,212,0.04), transparent 70%)', filter: 'blur(80px)', pointerEvents: 'none' }} />
+      <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 660, textAlign: 'center' }}>
 
-    {/* Grid overlay */}
-    <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px)', backgroundSize: '60px 60px', pointerEvents: 'none' }} />
-
-    <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 640, textAlign: 'center' }}>
-
-      {/* Logo */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 56 }}>
-        <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(59,130,246,0.3)' }}>
-          <span style={{ color: 'white', fontWeight: 900, fontSize: 18 }}>C</span>
+        {/* Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 48 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, #b45309, #d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(180,83,9,0.3)' }}>
+            <span className="playfair" style={{ color: 'white', fontWeight: 900, fontSize: 18 }}>C</span>
+          </div>
+          <span className="playfair" style={{ color: C.text, fontWeight: 800, fontSize: 20 }}>ClariPath</span>
         </div>
-        <span style={{ color: 'white', fontWeight: 800, fontSize: 20, letterSpacing: '-0.02em' }}>ClariPath</span>
-      </div>
 
-      {/* Main heading */}
-      <div style={{ marginBottom: 32 }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 16px', borderRadius: 20, background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.18)', color: '#93c5fd', fontSize: 12, fontWeight: 600, marginBottom: 24, letterSpacing: '0.05em' }}>
+        {/* Badge */}
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 16px', borderRadius: 100, background: C.goldBg, border: `1px solid ${C.goldBorder}`, color: C.gold, fontSize: 12, fontWeight: 600, marginBottom: 22, letterSpacing: '0.04em' }}>
+          <span style={{ width: 5, height: 5, borderRadius: '50%', background: C.gold, display: 'inline-block' }} />
           YOUR JOURNEY STARTS HERE
         </div>
 
-        <h1 style={{ fontSize: 'clamp(2rem, 6vw, 3.2rem)', fontWeight: 900, color: 'white', lineHeight: 1.15, letterSpacing: '-0.03em', marginBottom: 20 }}>
+        {/* Headline */}
+        <h1 className="playfair" style={{ fontSize: 'clamp(2rem, 5vw, 3.2rem)', fontWeight: 900, color: C.text, lineHeight: 1.15, letterSpacing: '-0.03em', marginBottom: 18 }}>
           The next 5 minutes will{' '}
-          <span style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6, #06b6d4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            shape your entire roadmap
-          </span>
+          <span className="gold-text">shape your entire roadmap</span>
         </h1>
 
-        <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.45)', lineHeight: 1.7, maxWidth: 480, margin: '0 auto' }}>
+        <p style={{ fontSize: 16, color: C.textMid, lineHeight: 1.7, maxWidth: 500, margin: '0 auto 40px' }}>
           We are about to ask you a few questions. Your answers will be used to build a personalised 16-week roadmap — one that no other student will have.
         </p>
-      </div>
 
-      {/* 3 promise cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 40 }}>
-        {[
-          { icon: '🎯', title: 'Be honest', desc: 'There are no right or wrong answers. The system works better when you are real.' },
-          { icon: '🧠', title: 'Be detailed', desc: 'The more context you give, the more accurate your roadmap will be.' },
-          { icon: '⏱️', title: 'Take your time', desc: 'Do not rush. These answers decide your entire learning path.' },
-        ].map((item, i) => (
-          <div key={i} style={{
-            padding: '20px 16px',
-            borderRadius: 16,
-            background: 'rgba(255,255,255,0.025)',
-            border: '1px solid rgba(255,255,255,0.07)',
-            textAlign: 'center',
-            transition: 'all 0.3s ease',
-          }}>
-            <div style={{ fontSize: 28, marginBottom: 10 }}>{item.icon}</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'white', marginBottom: 6 }}>{item.title}</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5 }}>{item.desc}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* What happens next */}
-      <div style={{ padding: '20px 24px', borderRadius: 16, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 40, textAlign: 'left' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.4)', marginBottom: 16, letterSpacing: '0.06em' }}>WHAT HAPPENS NEXT</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* 3 promise cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 32 }}>
           {[
-            { step: '01', text: 'Tell us your branch and how clear you are about your career', color: '#3b82f6' },
-            { step: '02', text: 'Answer discovery questions so we understand what suits you', color: '#8b5cf6' },
-            { step: '03', text: 'Pick a career goal and explore it in detail before committing', color: '#06b6d4' },
-            { step: '04', text: 'Tell us what you already know — we build on top of that', color: '#10b981' },
-            { step: '05', text: 'Answer 7 personalised questions — your roadmap is generated', color: '#f59e0b' },
+            { icon: '🎯', title: 'Be honest', desc: 'There are no right or wrong answers. The system works better when you are real.' },
+            { icon: '🧠', title: 'Be detailed', desc: 'The more context you give, the more accurate your roadmap will be.' },
+            { icon: '⏱️', title: 'Take your time', desc: 'Do not rush. These answers decide your entire learning path.' },
           ].map((item, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{ width: 28, height: 28, borderRadius: 8, background: `${item.color}18`, border: `1px solid ${item.color}35`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <span style={{ fontSize: 10, fontWeight: 800, color: item.color }}>{item.step}</span>
-              </div>
-              <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5 }}>{item.text}</span>
+            <div key={i} style={{ padding: '22px 18px', borderRadius: 18, background: C.white, border: `1px solid ${C.border}`, textAlign: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.04)' }}>
+              <div style={{ fontSize: 28, marginBottom: 10 }}>{item.icon}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 6 }}>{item.title}</div>
+              <div style={{ fontSize: 11, color: C.textLight, lineHeight: 1.5 }}>{item.desc}</div>
             </div>
           ))}
         </div>
+
+        {/* What happens next */}
+        <div style={{ padding: '22px 28px', borderRadius: 18, background: C.white, border: `1px solid ${C.border}`, marginBottom: 36, textAlign: 'left', boxShadow: '0 2px 10px rgba(0,0,0,0.04)' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.textLight, marginBottom: 16, letterSpacing: '0.08em' }}>WHAT HAPPENS NEXT</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {[
+              { step: '01', text: 'Tell us your branch and how clear you are about your career', color: C.gold },
+              { step: '02', text: 'Answer discovery questions so we understand what suits you', color: '#7c3aed' },
+              { step: '03', text: 'Pick a career goal and explore it in detail before committing', color: '#1d4ed8' },
+              { step: '04', text: 'Tell us what you already know — we build on top of that', color: '#047857' },
+              { step: '05', text: 'Answer 7 personalised questions — your roadmap is generated', color: C.goldLight },
+            ].map((item) => (
+              <div key={item.step} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ width: 30, height: 30, borderRadius: 8, background: `${item.color}12`, border: `1px solid ${item.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <span className="playfair" style={{ fontSize: 10, fontWeight: 900, color: item.color }}>{item.step}</span>
+                </div>
+                <span style={{ fontSize: 13, color: C.textMid, lineHeight: 1.5 }}>{item.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* CTA */}
+        <button className="ob-btn" onClick={() => setScreen('intro')}
+          style={{ ...btn, maxWidth: 400, margin: '0 auto', display: 'block', padding: '15px 32px', fontSize: 15, fontWeight: 800 }}>
+          I am ready — Let's begin →
+        </button>
+        <p style={{ fontSize: 12, color: C.textLight, marginTop: 14 }}>
+          Takes about 5 minutes · No right or wrong answers
+        </p>
       </div>
-
-      {/* CTA Button */}
-      <button
-        onClick={() => setScreen('intro')}
-        style={{
-          width: '100%',
-          maxWidth: 400,
-          padding: '16px 32px',
-          borderRadius: 14,
-          border: 'none',
-          background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-          color: 'white',
-          fontWeight: 800,
-          fontSize: 15,
-          cursor: 'pointer',
-          boxShadow: '0 0 30px rgba(59,130,246,0.25)',
-          transition: 'all 0.3s ease',
-          letterSpacing: '-0.01em',
-        }}
-        onMouseEnter={e => { e.target.style.transform = 'translateY(-2px)'; e.target.style.boxShadow = '0 8px 40px rgba(59,130,246,0.35)' }}
-        onMouseLeave={e => { e.target.style.transform = 'translateY(0)'; e.target.style.boxShadow = '0 0 30px rgba(59,130,246,0.25)' }}
-      >
-        I am ready — Let's begin →
-      </button>
-
-      <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)', marginTop: 16 }}>
-        Takes about 5 minutes · No right or wrong answers
-      </p>
     </div>
-
-    <style>{`
-      @keyframes pulse1 {
-        0%, 100% { transform: scale(1); opacity: 0.6; }
-        50% { transform: scale(1.1); opacity: 1; }
-      }
-      @keyframes pulse2 {
-        0%, 100% { transform: scale(1.1); opacity: 1; }
-        50% { transform: scale(1); opacity: 0.6; }
-      }
-    `}</style>
-  </div>
-)
+  )
 
   // ── SCREEN: INTRO ──
   if (screen === 'intro') return (
-    <div style={bg}>
-      <div style={{ ...card, maxWidth: 600 }}>
-        <div style={{ position: 'absolute', top: -80, right: -80, width: 250, height: 250, borderRadius: '50%', background: 'radial-gradient(circle, rgba(59,130,246,0.12), transparent)', filter: 'blur(40px)', pointerEvents: 'none' }} />
-        <div style={{ position: 'relative', zIndex: 1 }}>
+    <div style={{ ...pageBg, alignItems: 'center' }}>
+      <style>{sharedStyle}</style>
+      <BgDecor />
+      <div style={{ ...card, maxWidth: 600, zIndex: 1 }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, transparent, ${C.gold}, transparent)` }} />
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 32 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ color: 'white', fontWeight: 'bold' }}>C</span>
-            </div>
-            <span style={{ color: 'white', fontWeight: 'bold', fontSize: 18 }}>ClariPath</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #b45309, #d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span className="playfair" style={{ color: 'white', fontWeight: 900, fontSize: 15 }}>C</span>
           </div>
-
-          <h2 style={title}>Let's find your path</h2>
-          <p style={subtitle}>Tell us a bit about yourself so we can build a roadmap made specifically for you.</p>
-
-          {/* Branch */}
-          <div style={{ marginBottom: 24 }}>
-            <label style={labelStyle}>What is your college branch?</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              {BRANCHES.map((b, i) => (
-                <button key={b} onClick={() => setBranch(FIELDS[i])}
-                  style={optionBtn(branch === FIELDS[i])}>
-                  {b}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Semester */}
-          <div style={{ marginBottom: 24 }}>
-            <label style={labelStyle}>Which semester are you in?</label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 6 }}>
-              {SEMESTERS.map(s => (
-                <button key={s} onClick={() => setSemester(s)}
-                  style={{ ...optionBtn(semester === s), textAlign: 'center', padding: '10px 4px' }}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Interest in other field */}
-          <div style={{ marginBottom: 24 }}>
-            <label style={labelStyle}>Are you interested in a different field?</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
-              {[
-                { value: '', label: 'No, I want to stay in my branch' },
-                { value: 'show', label: 'Yes, I want to explore another field' },
-              ].map(opt => (
-                <button key={opt.label}
-                  onClick={() => { setInterestedOtherField(opt.value === 'show' ? 'CS' : ''); }}
-                  style={optionBtn(opt.value === '' ? interestedOtherField === '' : interestedOtherField !== '')}>
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-
-            {interestedOtherField !== '' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 10 }}>
-                {FIELDS.map(f => (
-                  <button key={f} onClick={() => setInterestedOtherField(f)}
-                    style={optionBtn(interestedOtherField === f)}>
-                    {f}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Clarity */}
-          <div style={{ marginBottom: 32 }}>
-            <label style={labelStyle}>Do you know what career you want?</label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {CLARITY_OPTIONS.map(c => (
-                <button key={c.value} onClick={() => setClarity(c.value)}
-                  style={optionBtn(clarity === c.value)}>
-                  {c.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <button onClick={handleIntroNext}
-            style={branch && semester && clarity ? btn : btnOff}
-            disabled={!branch || !semester || !clarity}>
-            Continue →
-          </button>
+          <span className="playfair" style={{ color: C.text, fontWeight: 800, fontSize: 17 }}>ClariPath</span>
         </div>
-      </div>
-    </div>
-  )
 
-  if (screen === 'questions') {
-  const pct = (currentQ / visibleQuestions.length) * 100
-  const opts = QUESTION_OPTIONS[selectedField]?.[currentQ] || {}
-  return (
-    <div style={bg}>
-      <div style={card}>
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          {progressBar(pct)}
-          <h2 style={{ ...title, fontSize: 18, marginBottom: 24, lineHeight: 1.5 }}>
-            {visibleQuestions[currentQ]}
-          </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
-            {Object.entries(opts).map(([letter, text]) => (
-              <button key={letter}
-                onClick={() => {
-                  const updated = { ...answers, [currentQ]: letter }
-                  setAnswers(updated)
-                  if (currentQ + 1 >= visibleQuestions.length) {
-                    const scored = scoreAnswers(selectedField, updated, goals)
-                    setGoals(scored)
-                    setScreen('goals')
-                  } else {
-                    setCurrentQ(currentQ + 1)
-                  }
-                }}
-                style={{
-                  padding: '14px 18px',
-                  borderRadius: 12,
-                  border: `1.5px solid ${answers[currentQ] === letter ? 'rgba(59,130,246,0.6)' : 'rgba(255,255,255,0.07)'}`,
-                  background: answers[currentQ] === letter ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.02)',
-                  color: answers[currentQ] === letter ? '#60a5fa' : 'rgba(255,255,255,0.65)',
-                  fontSize: 13,
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.2s',
-                }}>
-                <span style={{ fontWeight: 700, marginRight: 10, color: answers[currentQ] === letter ? '#60a5fa' : 'rgba(255,255,255,0.35)' }}>{letter}.</span>
-                {text}
+        <h2 style={title}>Let's find your path</h2>
+        <p style={subtitle}>Tell us a bit about yourself so we can build a roadmap made specifically for you.</p>
+
+        {/* Branch */}
+        <div style={{ marginBottom: 22 }}>
+          <label style={labelStyle}>What is your college branch?</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {BRANCHES.map((b, i) => (
+              <button key={b} className="ob-option" onClick={() => setBranch(FIELDS[i])} style={optionBtn(branch === FIELDS[i])}>{b}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Semester */}
+        <div style={{ marginBottom: 22 }}>
+          <label style={labelStyle}>Which semester are you in?</label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 6 }}>
+            {SEMESTERS.map(s => (
+              <button key={s} className="ob-option" onClick={() => setSemester(s)} style={{ ...optionBtn(semester === s), textAlign: 'center', padding: '10px 4px' }}>{s}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Other field */}
+        <div style={{ marginBottom: 22 }}>
+          <label style={labelStyle}>Are you interested in a different field?</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+            {[
+              { value: '', label: 'No, stay in my branch' },
+              { value: 'show', label: 'Yes, explore another field' },
+            ].map(opt => (
+              <button key={opt.label} className="ob-option"
+                onClick={() => setInterestedOtherField(opt.value === 'show' ? 'CSE' : '')}
+                style={optionBtn(opt.value === '' ? interestedOtherField === '' : interestedOtherField !== '')}>
+                {opt.label}
               </button>
             ))}
           </div>
-          {currentQ > 0 && (
-            <button onClick={() => setCurrentQ(currentQ - 1)}
-              style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid rgba(255,255,255,0.07)', background: 'transparent', color: 'rgba(255,255,255,0.35)', fontSize: 13, cursor: 'pointer' }}>
-              ← Back
-            </button>
+          {interestedOtherField !== '' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+              {FIELDS.map(f => (
+                <button key={f} className="ob-option" onClick={() => setInterestedOtherField(f)} style={optionBtn(interestedOtherField === f)}>{f}</button>
+              ))}
+            </div>
           )}
         </div>
+
+        {/* Clarity */}
+        <div style={{ marginBottom: 28 }}>
+          <label style={labelStyle}>Do you know what career you want?</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {CLARITY_OPTIONS.map(c => (
+              <button key={c.value} className="ob-option" onClick={() => setClarity(c.value)} style={optionBtn(clarity === c.value)}>{c.label}</button>
+            ))}
+          </div>
+        </div>
+
+        <button className="ob-btn" onClick={handleIntroNext} style={branch && semester && clarity ? btn : btnOff} disabled={!branch || !semester || !clarity}>
+          Continue →
+        </button>
       </div>
     </div>
   )
-}
+
+  // ── SCREEN: QUESTIONS ──
+  if (screen === 'questions') {
+    const pct = (currentQ / visibleQuestions.length) * 100
+    const opts = QUESTION_OPTIONS[selectedField]?.[currentQ] || {}
+    return (
+      <div style={{ ...pageBg, alignItems: 'center' }}>
+        <style>{sharedStyle}</style>
+        <BgDecor />
+        <div style={{ ...card, zIndex: 1 }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, transparent, ${C.gold}, transparent)` }} />
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            {progressBar(pct)}
+            <h2 style={{ ...title, fontSize: 18, marginBottom: 22, lineHeight: 1.5 }}>
+              {visibleQuestions[currentQ]}
+            </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 20 }}>
+              {Object.entries(opts).map(([letter, text]) => (
+                <button key={letter} className="ob-option"
+                  onClick={() => {
+                    const updated = { ...answers, [currentQ]: letter }
+                    setAnswers(updated)
+                    if (currentQ + 1 >= visibleQuestions.length) {
+                      const scored = scoreAnswers(selectedField, updated, goals)
+                      setGoals(scored)
+                      setScreen('goals')
+                    } else {
+                      setCurrentQ(currentQ + 1)
+                    }
+                  }}
+                  style={{
+                    padding: '13px 18px', borderRadius: 12,
+                    border: `1.5px solid ${answers[currentQ] === letter ? C.gold + '60' : C.border}`,
+                    background: answers[currentQ] === letter ? C.goldBg : C.white,
+                    color: answers[currentQ] === letter ? C.gold : C.textMid,
+                    fontSize: 13, fontWeight: 500, cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s',
+                  }}>
+                  <span style={{ fontWeight: 700, marginRight: 10, color: answers[currentQ] === letter ? C.gold : C.textLight }}>{letter}.</span>
+                  {text}
+                </button>
+              ))}
+            </div>
+            {currentQ > 0 && (
+              <button onClick={() => setCurrentQ(currentQ - 1)}
+                style={{ width: '100%', padding: 11, borderRadius: 12, border: `1px solid ${C.border}`, background: 'transparent', color: C.textLight, fontSize: 13, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
+                ← Back
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   // ── SCREEN: GOALS ──
   if (screen === 'goals') return (
-    <div style={{ ...bg, alignItems: 'flex-start', paddingTop: 48 }}>
-      <div style={{ width: '100%', maxWidth: 680, margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: 36 }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 14px', borderRadius: 20, background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', color: '#93c5fd', fontSize: 12, fontWeight: 600, marginBottom: 14 }}>
-            ● Based on your answers
+    <div style={{ ...pageBg, alignItems: 'flex-start', paddingTop: 48 }}>
+      <style>{sharedStyle}</style>
+      <BgDecor />
+      <div style={{ width: '100%', maxWidth: 680, margin: '0 auto', position: 'relative', zIndex: 1 }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 14px', borderRadius: 100, background: C.goldBg, border: `1px solid ${C.goldBorder}`, color: C.gold, fontSize: 12, fontWeight: 600, marginBottom: 14 }}>
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: C.gold, display: 'inline-block' }} />
+            Based on your answers
           </div>
-          <h2 style={{ fontSize: 30, fontWeight: 900, color: 'white', marginBottom: 8, letterSpacing: '-0.02em' }}>
+          <h2 className="playfair" style={{ fontSize: 30, fontWeight: 900, color: C.text, marginBottom: 8, letterSpacing: '-0.02em' }}>
             Here are your career matches
           </h2>
-          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.35)' }}>
-            Tap any goal to learn more before deciding
-          </p>
+          <p style={{ fontSize: 14, color: C.textLight }}>Tap any goal to learn more before deciding</p>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '0 16px 40px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '0 16px 48px' }}>
           {goals.map((goal, i) => (
-            <button key={goal.id} onClick={() => { setDetailGoal(goal); setScreen('goal-detail') }}
+            <button key={goal.id} className="goal-card"
+              onClick={() => { setDetailGoal(goal); setScreen('goal-detail') }}
               style={{
-                padding: '18px 22px', borderRadius: 16,
-                border: `1.5px solid ${i === 0 ? 'rgba(59,130,246,0.45)' : 'rgba(255,255,255,0.06)'}`,
-                background: i === 0 ? 'rgba(59,130,246,0.07)' : 'rgba(255,255,255,0.02)',
-                cursor: 'pointer', textAlign: 'left', position: 'relative', overflow: 'hidden',
+                padding: '18px 22px', borderRadius: 16, cursor: 'pointer', textAlign: 'left',
+                border: `1.5px solid ${i === 0 ? C.gold + '50' : C.border}`,
+                background: i === 0 ? C.goldBg : C.white,
+                position: 'relative', overflow: 'hidden',
+                boxShadow: i === 0 ? '0 4px 20px rgba(180,83,9,0.1)' : '0 2px 8px rgba(0,0,0,0.04)',
+                transition: 'all 0.25s ease',
               }}>
-              {i === 0 && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)' }} />}
+              {i === 0 && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2.5, background: `linear-gradient(90deg, transparent, ${C.gold}, transparent)` }} />}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div style={{ width: 46, height: 46, borderRadius: 12, background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ width: 46, height: 46, borderRadius: 12, background: i === 0 ? 'rgba(180,83,9,0.1)' : C.bgAlt, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, border: `1px solid ${i === 0 ? C.goldBorder : C.border}` }}>
                     {goal.icon || '🎯'}
                   </div>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                      <span style={{ fontSize: 15, fontWeight: 700, color: 'white' }}>{goal.title}</span>
-                      {i === 0 && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.25)' }}>TOP MATCH</span>}
+                      <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{goal.title}</span>
+                      {i === 0 && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: C.gold + '18', color: C.gold, border: `1px solid ${C.gold}30` }}>TOP MATCH</span>}
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-  {goal.matchPercent > 0 && (
-    <span style={{ fontSize: 13, fontWeight: 700, color: i === 0 ? '#60a5fa' : 'rgba(255,255,255,0.5)' }}>
-      {goal.matchPercent}%
-    </span>
-  )}
-  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>Tap to explore →</span>
-</div>
+                    <span style={{ fontSize: 12, color: C.textLight }}>{goal.domain}</span>
                   </div>
                 </div>
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>Tap to explore →</span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+                  {goal.matchPercent > 0 && (
+                    <span style={{ fontSize: 16, fontWeight: 800, color: i === 0 ? C.gold : C.textLight, fontFamily: "'Playfair Display', serif" }}>{goal.matchPercent}%</span>
+                  )}
+                  <span style={{ fontSize: 11, color: C.textLight }}>Tap to explore →</span>
+                </div>
               </div>
             </button>
           ))}
@@ -583,84 +567,143 @@ if (screen === 'welcome') return (
     </div>
   )
 
-  // ── SCREEN: GOAL DETAIL ──
+ // ── SCREEN: GOAL DETAIL ──
   if (screen === 'goal-detail' && detailGoal) return (
-    <div style={{ ...bg, alignItems: 'flex-start', paddingTop: 40 }}>
-      <div style={{ width: '100%', maxWidth: 580, margin: '0 auto' }}>
+    <div style={{ minHeight: '100vh', background: C.bg, padding: '0 0 60px 0', position: 'relative', overflow: 'hidden' }}>
+      <BgDecor />
+      <style>{sharedStyle}</style>
+      <div style={{ position: 'relative', zIndex: 10, maxWidth: 700, margin: '0 auto', padding: '40px 24px 0' }}>
+
         <button onClick={() => setScreen('goals')}
-          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)', cursor: 'pointer', fontSize: 13, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 6 }}>
+          style={{ background: 'none', border: 'none', color: C.gold, fontFamily: 'DM Sans, sans-serif',
+            fontSize: 14, cursor: 'pointer', marginBottom: 28, display: 'flex', alignItems: 'center', gap: 6 }}>
           ← Back to all goals
         </button>
 
-        <div style={{ ...card, padding: 36 }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)' }} />
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 28 }}>
-            <div style={{ width: 56, height: 56, borderRadius: 14, background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>
-              {detailGoal.icon}
-            </div>
+        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 20,
+          padding: '28px 32px', marginBottom: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 16 }}>
+            <div style={{ width: 56, height: 56, background: C.goldBg, borderRadius: 14,
+              border: `1px solid ${C.goldBorder}`, flexShrink: 0 }} />
             <div>
-              <h2 style={{ fontSize: 22, fontWeight: 900, color: 'white', marginBottom: 3 }}>{detailGoal.title}</h2>
-              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>{detailGoal.domain}</span>
+              <h2 style={{ fontFamily: 'Playfair Display, serif', fontSize: 26, fontWeight: 700, color: C.text, margin: 0 }}>{detailGoal.title}</h2>
+              <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 14, color: C.textLight, margin: '4px 0 0' }}>{detailGoal.field || detailGoal.domain}</p>
             </div>
           </div>
-
-          {[
-            { label: '📌 What is this career?', value: detailGoal.description },
-            { label: '📚 What will you learn?', value: detailGoal.what_you_learn },
-            { label: '💼 What will you do daily?', value: detailGoal.what_you_do },
-            { label: '💰 Salary range in India', value: detailGoal.salary },
-            { label: '🏢 Top companies hiring', value: detailGoal.companies },
-          ].map((item, i) => (
-            <div key={i} style={{ marginBottom: 14, padding: '14px 16px', borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.4)', marginBottom: 5 }}>{item.label}</div>
-              <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.75)', lineHeight: 1.6 }}>{item.value}</div>
-            </div>
-          ))}
-
-          <button onClick={handleConfirmGoal} style={{ ...btn, marginTop: 16 }}>
-            Yes, this is my goal — Start assessment →
-          </button>
+          {detailGoal.fieldOverview && (
+            <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 15, color: C.textMid,
+              lineHeight: 1.7, margin: 0, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+              {detailGoal.fieldOverview}
+            </p>
+          )}
         </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+          <DetailCard icon="📚" label="What will you learn?" value={detailGoal.whatYouLearn} C={C} />
+          <DetailCard icon="💼" label="What will you do daily?" value={detailGoal.whatYouDo} C={C} />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+          <DetailCard icon="🧠" label="Core skills needed" value={detailGoal.coreSkills} C={C} />
+          <DetailCard icon="🛠️" label="Tools & software" value={detailGoal.tools} C={C} />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+          <DetailCard icon="👤" label="Primary job roles" value={detailGoal.primaryRoles} C={C} />
+          <DetailCard icon="🚀" label="Where you start" value={detailGoal.entryLevelRole} C={C} />
+        </div>
+
+        {detailGoal.careerPath && (
+          <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 16,
+            padding: '18px 22px', marginBottom: 14, boxShadow: '0 1px 6px rgba(0,0,0,0.04)' }}>
+            <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 12, fontWeight: 600,
+              color: C.gold, textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 10px' }}>
+              📈 Long-term career path
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+              {detailGoal.careerPath.split('→').map((step, i, arr) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ background: i === 0 ? C.goldBg : C.bgAlt,
+                    border: `1px solid ${i === 0 ? C.goldBorder : C.border}`,
+                    borderRadius: 20, padding: '4px 12px', fontFamily: 'DM Sans, sans-serif',
+                    fontSize: 13, color: i === 0 ? C.gold : C.textMid, fontWeight: i === 0 ? 600 : 400 }}>
+                    {step.trim()}
+                  </span>
+                  {i < arr.length - 1 && <span style={{ color: C.textLight, fontSize: 14 }}>→</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+          <DetailCard icon="💰" label="Salary range" value={detailGoal.salaryRange} C={C} highlight />
+          <DetailCard icon="📊" label="Career scope & growth" value={detailGoal.careerScope} C={C} />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+          <DetailCard icon="🎓" label="Relevant subjects" value={detailGoal.academicRelevance} C={C} />
+          <DetailCard icon="✅" label="Best suited for" value={detailGoal.whoShouldChoose} C={C} />
+        </div>
+
+        {detailGoal.topCompanies && (
+          <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 16,
+            padding: '18px 22px', marginBottom: 28, boxShadow: '0 1px 6px rgba(0,0,0,0.04)' }}>
+            <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 12, fontWeight: 600,
+              color: C.gold, textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 10px' }}>
+              🏢 Top companies hiring
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {detailGoal.topCompanies.split(',').map((c, i) => (
+                <span key={i} style={{ background: C.bgAlt, border: `1px solid ${C.border}`,
+                  borderRadius: 20, padding: '4px 12px',
+                  fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: C.textMid }}>
+                  {c.trim()}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <button onClick={() => { setConfirmedGoal(detailGoal); setScreen('whatyouknow'); }}
+          style={{ width: '100%', padding: '16px', background: `linear-gradient(135deg, ${C.gold}, ${C.goldLight})`,
+            color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'DM Sans, sans-serif',
+            fontSize: 16, fontWeight: 600, cursor: 'pointer', letterSpacing: 0.3 }}>
+          Yes, this is my goal — Start assessment →
+        </button>
+
       </div>
     </div>
   )
 
+
   // ── SCREEN: WHAT YOU KNOW ──
   if (screen === 'whatyouknow') return (
-    <div style={bg}>
-      <div style={card}>
-        <div style={{ position: 'absolute', top: -80, left: -80, width: 250, height: 250, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139,92,246,0.1), transparent)', filter: 'blur(40px)', pointerEvents: 'none' }} />
+    <div style={{ ...pageBg, alignItems: 'center' }}>
+      <style>{sharedStyle}</style>
+      <BgDecor />
+      <div style={{ ...card, zIndex: 1 }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, transparent, #7c3aed, transparent)` }} />
         <div style={{ position: 'relative', zIndex: 1 }}>
-
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 20, background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)', color: '#c4b5fd', fontSize: 11, fontWeight: 600, marginBottom: 24 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 100, background: '#f5f3ff', border: '1px solid #ddd6fe', color: '#7c3aed', fontSize: 11, fontWeight: 600, marginBottom: 20 }}>
             Goal confirmed — {confirmedGoal?.title}
           </div>
-
           <h2 style={title}>What do you already know?</h2>
           <p style={subtitle}>
             Tell us everything you have learned so far — courses, projects, languages, tools, anything.
             Be honest and detailed. The more you tell us, the better your assessment will be.
           </p>
-
-          <div style={{ padding: '12px 16px', borderRadius: 12, background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)', marginBottom: 20 }}>
-            <p style={{ fontSize: 12, color: '#93c5fd', margin: 0, lineHeight: 1.6 }}>
-              💡 <strong>Take your time with this.</strong> This single answer is used to generate 7 personalised questions just for you. A detailed answer means better questions and a better roadmap.
+          <div style={{ padding: '12px 16px', borderRadius: 12, background: C.goldBg, border: `1px solid ${C.goldBorder}`, marginBottom: 18 }}>
+            <p style={{ fontSize: 12, color: C.gold, margin: 0, lineHeight: 1.6 }}>
+              💡 <strong>Take your time.</strong> This single answer is used to generate 7 personalised questions just for you. A detailed answer means a better roadmap.
             </p>
           </div>
-
-          <textarea
+          <textarea className="ob-input"
             value={whatYouKnow}
             onChange={e => setWhatYouKnow(e.target.value)}
             placeholder="Example: I know basic C++ from college, built a simple calculator project, watched some YouTube tutorials on Java but never built anything with it, know basic HTML and CSS, tried Python for 2 weeks but stopped..."
             rows={7}
             style={inputStyle}
-            onFocus={e => e.target.style.borderColor = 'rgba(139,92,246,0.5)'}
-            onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.08)'}
           />
-
-          <button onClick={handleWhatYouKnowNext}
-            style={whatYouKnow.trim().length > 20 ? { ...btn, background: 'linear-gradient(135deg, #8b5cf6, #06b6d4)' } : btnOff}
+          <button className="ob-btn" onClick={handleWhatYouKnowNext}
+            style={whatYouKnow.trim().length > 20 ? btn : btnOff}
             disabled={whatYouKnow.trim().length <= 20}>
             Generate My Assessment Questions →
           </button>
@@ -673,22 +716,23 @@ if (screen === 'welcome') return (
   if (screen === 'assessment') {
     const pct = (currentQ / generatedQuestions.length) * 100
     return (
-      <div style={bg}>
-        <div style={card}>
+      <div style={{ ...pageBg, alignItems: 'center' }}>
+        <style>{sharedStyle}</style>
+        <BgDecor />
+        <div style={{ ...card, zIndex: 1 }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, transparent, #7c3aed, transparent)` }} />
           <div style={{ position: 'relative', zIndex: 1 }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 20, background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)', color: '#c4b5fd', fontSize: 11, fontWeight: 600, marginBottom: 20 }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 100, background: '#f5f3ff', border: '1px solid #ddd6fe', color: '#7c3aed', fontSize: 11, fontWeight: 600, marginBottom: 18 }}>
               Skill Assessment — {confirmedGoal?.title}
             </div>
-            {progressBar(pct, 'linear-gradient(90deg, #8b5cf6, #06b6d4)')}
-            <h2 style={{ ...title, fontSize: 18, marginBottom: 24, lineHeight: 1.5 }}>
+            {progressBar(pct)}
+            <h2 style={{ ...title, fontSize: 18, marginBottom: 20, lineHeight: 1.5 }}>
               {generatedQuestions[currentQ]}
             </h2>
-            <textarea value={currentAnswer} onChange={e => setCurrentAnswer(e.target.value)}
-              placeholder="Type your answer here..." rows={5} style={inputStyle}
-              onFocus={e => e.target.style.borderColor = 'rgba(139,92,246,0.5)'}
-              onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.08)'} />
-            <button onClick={handleAssessNext}
-              style={currentAnswer.trim() ? { ...btn, background: 'linear-gradient(135deg, #8b5cf6, #06b6d4)' } : btnOff}
+            <textarea className="ob-input" value={currentAnswer} onChange={e => setCurrentAnswer(e.target.value)}
+              placeholder="Type your answer here..." rows={5} style={inputStyle} />
+            <button className="ob-btn" onClick={handleAssessNext}
+              style={currentAnswer.trim() ? btn : btnOff}
               disabled={!currentAnswer.trim()}>
               {currentQ + 1 >= generatedQuestions.length ? 'Build My Roadmap →' : 'Next →'}
             </button>
@@ -700,20 +744,28 @@ if (screen === 'welcome') return (
 
   // ── SCREEN: LOADING ──
   if (screen === 'loading') return (
-    <div style={{ ...bg, flexDirection: 'column', gap: 24 }}>
-      <div style={{ width: 64, height: 64, borderRadius: 18, background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 40px rgba(59,130,246,0.3)' }}>
-        <svg style={{ animation: 'spin 1s linear infinite', width: 30, height: 30 }} fill="none" viewBox="0 0 24 24">
-          <circle style={{ opacity: 0.25 }} cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
-          <path style={{ opacity: 0.75 }} fill="white" d="M4 12a8 8 0 018-8v8z" />
-        </svg>
+    <div style={{ ...pageBg, flexDirection: 'column', gap: 24 }}>
+      <style>{sharedStyle}</style>
+      <BgDecor />
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24 }}>
+        <div style={{ width: 68, height: 68, borderRadius: 20, background: 'linear-gradient(135deg, #b45309, #d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 24px rgba(180,83,9,0.35)' }}>
+          <svg style={{ animation: 'spin 1s linear infinite', width: 30, height: 30 }} fill="none" viewBox="0 0 24 24">
+            <circle style={{ opacity: 0.25 }} cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
+            <path style={{ opacity: 0.75 }} fill="white" d="M4 12a8 8 0 018-8v8z" />
+          </svg>
+        </div>
+        <div style={{ textAlign: 'center', maxWidth: 360 }}>
+          <h2 className="playfair" style={{ fontSize: 22, fontWeight: 900, color: C.text, marginBottom: 10 }}>{loadingMessage}</h2>
+          <p style={{ fontSize: 14, color: C.textLight, lineHeight: 1.65 }}>
+            This takes a few seconds. We are analysing everything you told us to build something truly personalised.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          {[0, 1, 2].map(i => (
+            <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: C.gold, opacity: 0.4, animation: `drift ${1 + i * 0.3}s ease-in-out infinite ${i * 0.2}s` }} />
+          ))}
+        </div>
       </div>
-      <div style={{ textAlign: 'center', maxWidth: 360 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 900, color: 'white', marginBottom: 10 }}>{loadingMessage}</h2>
-        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', lineHeight: 1.6 }}>
-          This takes a few seconds. We are analysing everything you told us to build something truly personalised.
-        </p>
-      </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }
