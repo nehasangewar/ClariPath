@@ -15,24 +15,22 @@ public class OnboardingController {
     }
 
     @PostMapping("/generate-roadmap")
-    public String generateRoadmap(@RequestBody GenerateRoadmapRequest request) {
+    public String generateRoadmap(@RequestBody GenerateRoadmapRequest request) throws Exception {
 
-        String prompt = """
-        Student Branch: %s
-        Semester: %s
-        Goal: %s
-        Current Knowledge: %s
-        Answers: %s
+        // ✅ No JSON examples in the prompt — plain text only
+        String prompt = "You are an expert computer science educator. " +
+                "A student has provided the following details: " +
+                "Branch: " + request.getBranch() + ". " +
+                "Semester: " + request.getSemester() + ". " +
+                "Career Goal: " + request.getConfirmedGoal() + ". " +
+                "Current Knowledge: " + request.getWhatYouKnow() + ". " +
+                "Assessment Answers: " + request.getAssessmentAnswers() + ". " +
+                "Generate a 16-week personalized learning roadmap divided into 4 phases. " +
+                "Return ONLY raw JSON with no markdown, no explanation, no code fences. " +
+                "The JSON must follow this exact structure: " +
+                "{\"phases\": [{\"phase_number\": 1, \"phase_goal\": \"string\", \"weeks\": [{\"week_number\": 1, \"weekly_focus\": \"string\", \"tasks\": [{\"id\": \"t1\", \"title\": \"string\", \"description\": \"string\", \"resource_name\": \"string\", \"resource_url\": \"string\", \"estimated_hours\": 3, \"difficulty\": \"EASY\"}]}]}]}. " +
+                "Return exactly 4 phases, 4 weeks per phase, 3 tasks per week. Difficulty must be EASY, MEDIUM, or HARD only.";
 
-        Determine student's skill level and generate a 16 week roadmap.
-        """.formatted(
-                request.getBranch(),
-                request.getSemester(),
-                request.getConfirmedGoal(),
-                request.getWhatYouKnow(),
-                request.getAssessmentAnswers()
-        );
-
-        return onboardingService.callGemini(prompt);
+        return onboardingService.generateRoadmapFromAI(prompt, request.getUserId());
     }
 }
