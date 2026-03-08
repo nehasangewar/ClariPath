@@ -43,4 +43,13 @@ public class ProfileService {
         // generate roadmap
         learningPathService.generatePath(profile);
     }
+
+    public StudentProfile getProfile(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        return profileRepository
+                .findByUserId(user.getId())
+                .orElseThrow(() -> new RuntimeException("Profile not found"));
+    }
 }

@@ -28,14 +28,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         this.userDetailsService = userDetailsService;
     }
 
-    // ✅ Skip filter for public endpoints
+    // Skip filter for all public endpoints
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
 
         return path.startsWith("/api/auth")
                 || path.startsWith("/api/onboarding")
-                || path.startsWith("/api/career-goals");
+                || path.startsWith("/api/career-goals")
+                || path.startsWith("/api/universities");
     }
 
     @Override
@@ -56,11 +57,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String userEmail;
 
         try {
-            userEmail = jwtService.extractUsername(jwt);
-        } catch (Exception e) {
-            filterChain.doFilter(request, response);
-            return;
-        }
+    userEmail = jwtService.extractUsername(jwt);
+} catch (Exception e) {
+    SecurityContextHolder.clearContext();
+    filterChain.doFilter(request, response);
+    return;
+}
 
         if (userEmail != null &&
                 SecurityContextHolder.getContext().getAuthentication() == null) {
