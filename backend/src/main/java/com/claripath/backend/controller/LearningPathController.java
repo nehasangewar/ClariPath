@@ -1,7 +1,7 @@
 package com.claripath.backend.controller;
 
 import com.claripath.backend.entity.LearningPath;
-import com.claripath.backend.repository.LearningPathRepository;
+import com.claripath.backend.service.LearningPathService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -10,15 +10,24 @@ import java.util.List;
 @RequestMapping("/api/learning-path")
 public class LearningPathController {
 
-    private final LearningPathRepository learningPathRepository;
+    private final LearningPathService learningPathService;
 
-    public LearningPathController(LearningPathRepository learningPathRepository) {
-        this.learningPathRepository = learningPathRepository;
+    public LearningPathController(LearningPathService learningPathService) {
+        this.learningPathService = learningPathService;
     }
 
     @GetMapping("/{userId}")
     public List<LearningPath> getUserLearningPath(@PathVariable Long userId) {
+        return learningPathService.getUserLearningPath(userId);
+    }
 
-        return learningPathRepository.findByUserIdOrderByOrderNo(userId);
+    @PutMapping("/complete/{taskId}")
+    public LearningPath completeTask(@PathVariable Long taskId) {
+        return learningPathService.markTaskCompleted(taskId);
+    }
+
+    @PutMapping("/incomplete/{taskId}")
+    public LearningPath incompleteTask(@PathVariable Long taskId) {
+        return learningPathService.markTaskIncomplete(taskId);
     }
 }

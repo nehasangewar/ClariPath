@@ -40,8 +40,7 @@ public class ProfileService {
 
         profileRepository.save(profile);
 
-        // generate roadmap
-        learningPathService.generatePath(profile);
+
     }
 
     public StudentProfile getProfile(String email) {

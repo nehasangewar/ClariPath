@@ -6,4 +6,6 @@ import java.util.Optional;
 
 public interface RoadmapSnapshotRepository extends JpaRepository<RoadmapSnapshot, Long> {
     Optional<RoadmapSnapshot> findTopByUserIdOrderByGeneratedAtDesc(Long userId);
+    void deleteByUserId(Long userId);
+
 }
