@@ -3,21 +3,33 @@ package com.claripath.backend.onboarding.controller;
 import com.claripath.backend.onboarding.dto.GenerateRoadmapRequest;
 import com.claripath.backend.onboarding.service.OnboardingService;
 import org.springframework.web.bind.annotation.*;
+import com.claripath.backend.service.SyllabusService;
+
 
 @RestController
 @RequestMapping("/api/onboarding")
 public class OnboardingController {
 
     private final OnboardingService onboardingService;
+    private final SyllabusService syllabusService;
 
-    public OnboardingController(OnboardingService onboardingService) {
+    public OnboardingController(OnboardingService onboardingService,
+                                SyllabusService syllabusService) {
         this.onboardingService = onboardingService;
+        this.syllabusService = syllabusService;
     }
 
     @PostMapping("/generate-roadmap")
     public String generateRoadmap(@RequestBody GenerateRoadmapRequest request) throws Exception {
 
-        // ✅ No JSON examples in the prompt — plain text only
+        // 1. Fetch syllabus context from DB based on student's college, branch, semester
+        String syllabusContext = syllabusService.getSyllabusContext(
+                request.getCollegeId(),
+                request.getBranchId(),
+                request.getSemester()
+        );
+
+        // 2. Build prompt with syllabus injected
         String prompt = "You are an expert computer science educator. " +
                 "A student has provided the following details: " +
                 "Branch: " + request.getBranch() + ". " +
@@ -25,6 +37,13 @@ public class OnboardingController {
                 "Career Goal: " + request.getConfirmedGoal() + ". " +
                 "Current Knowledge: " + request.getWhatYouKnow() + ". " +
                 "Assessment Answers: " + request.getAssessmentAnswers() + ". " +
+
+                // ✅ SYLLABUS INJECTED HERE
+                "The student's college syllabus for this semester is as follows. " +
+                "You MUST align the roadmap tasks with these syllabus topics wherever relevant. " +
+                "Do not ignore subjects the student is currently studying in college. " +
+                syllabusContext + ". " +
+
                 "Generate a 16-week personalized learning roadmap divided into 4 phases. " +
                 "Return ONLY raw JSON with no markdown, no explanation, no code fences. " +
                 "The JSON must follow this exact structure: " +

@@ -1,11 +1,6 @@
 package com.claripath.backend.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
-import jakarta.persistence.Id;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Column;
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "syllabus")
@@ -15,28 +10,60 @@ public class Syllabus {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String branch;
+    @Column(name = "college_id")
+    private Long collegeId;
+
+    @Column(name = "branch_id")
+    private Long branchId;
 
     private Integer semester;
 
-    @Column(name = "subject_name")
-    private String subjectName;
+    @Column(name = "subject_id")
+    private Long subjectId;
 
     private String topics;
 
-    public String getBranch() {
-        return branch;
+    public Long getId() {
+        return id;
+    }
+
+    public Long getCollegeId() {
+        return collegeId;
+    }
+
+    public Long getBranchId() {
+        return branchId;
     }
 
     public Integer getSemester() {
         return semester;
     }
 
-    public String getSubjectName() {
-        return subjectName;
+    public Long getSubjectId() {
+        return subjectId;
     }
 
     public String getTopics() {
         return topics;
+    }
+
+    public void setCollegeId(Long collegeId) {
+        this.collegeId = collegeId;
+    }
+
+    public void setBranchId(Long branchId) {
+        this.branchId = branchId;
+    }
+
+    public void setSemester(Integer semester) {
+        this.semester = semester;
+    }
+
+    public void setSubjectId(Long subjectId) {
+        this.subjectId = subjectId;
+    }
+
+    public void setTopics(String topics) {
+        this.topics = topics;
     }
 }

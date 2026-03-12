@@ -31,23 +31,29 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
         http
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .csrf(csrf -> csrf.disable())
-            .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers(
-                    "/api/auth/**",
-                    "/api/career-goals",
-                    "/api/career-goals/**",
-                    "/api/onboarding/**",
-                    "/api/universities/**"
-                ).permitAll()
-                .anyRequest().authenticated())
-            .authenticationProvider(authenticationProvider)
-            .addFilterBefore(jwtAuthenticationFilter,
-                UsernamePasswordAuthenticationFilter.class);
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+
+                        // Public APIs
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/onboarding/**").permitAll()
+                        .requestMatchers("/api/career-goals/**").permitAll()
+                        .requestMatchers("/api/universities/**").permitAll()
+
+                        // AI endpoints
+                        .requestMatchers("/api/ai/**").permitAll()
+
+                        // Admin APIs
+                        .requestMatchers("/api/admin/**").permitAll()
+
+                        .anyRequest().authenticated()
+                )
+                .authenticationProvider(authenticationProvider)
+                .addFilterBefore(jwtAuthenticationFilter,
+                        UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -77,6 +83,7 @@ public class SecurityConfig {
                 "Origin",
                 "X-Requested-With"
         ));
+
         config.setExposedHeaders(List.of("Authorization"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);

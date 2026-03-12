@@ -78,8 +78,6 @@ public class AuthService {
     // LOGIN
     // ===============================
     public AuthResponse login(LoginRequest request) {
-
-        // Authenticate
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         request.getEmail(),
@@ -87,14 +85,12 @@ public class AuthService {
                 )
         );
 
-        // Get user from DB
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Generate JWT
-        String token = jwtService.generateToken(user.getEmail());
+        // ✅ FIXED — pass role into token
+        String token = jwtService.generateToken(user.getEmail(), user.getRole().name());
 
-        // Build and return AuthResponse
         AuthResponse.UserInfo userInfo = new AuthResponse.UserInfo(
                 user.getId(),
                 user.getName(),
