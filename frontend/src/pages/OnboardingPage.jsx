@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { QUESTION_OPTIONS, scoreAnswers } from '../utils/goalMapping'
+import { generateAssessmentQuestions } from '../services/assessmentGenerator'
+import { generateAndSaveRoadmap } from '../services/roadmapGenerator'
+import { useAuth } from '../context/AuthContext'
 
 const FIELDS = ['CSE', 'IT', 'Electronics', 'Mechanical', 'Civil', 'Electrical', 'AI_ML']
 const BRANCHES = ['Computer Science', 'Information Technology', 'Electronics', 'Mechanical', 'Civil', 'Electrical', 'AI/ML']
@@ -50,10 +53,13 @@ function DetailCard({ icon, label, value, C, highlight }) {
 
 export default function OnboardingPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   const [screen, setScreen] = useState('welcome')
   const [branch, setBranch] = useState('')
   const [semester, setSemester] = useState('')
+  const [hoursPerWeek, setHoursPerWeek] = useState(10)
+  const [mode, setMode] = useState('Placement')
   const [interestedOtherField, setInterestedOtherField] = useState('')
   const [clarity, setClarity] = useState('')
   const [selectedField, setSelectedField] = useState('')
@@ -66,8 +72,10 @@ export default function OnboardingPage() {
   const [generatedQuestions, setGeneratedQuestions] = useState([])
   const [assessAnswers, setAssessAnswers] = useState({})
   const [loadingMessage, setLoadingMessage] = useState('')
+  const [loadingSubMessage, setLoadingSubMessage] = useState('')
   const [goals, setGoals] = useState([])
   const [questions, setQuestions] = useState([])
+  const [assessmentError, setAssessmentError] = useState('')
 
   const totalQuestions = clarity === 'yes' ? 0 : clarity === 'maybe' ? 5 : 10
   const visibleQuestions = questions.slice(0, totalQuestions)
@@ -175,11 +183,11 @@ export default function OnboardingPage() {
     fontFamily: "'DM Sans', sans-serif",
   })
 
-  const progressBar = (pct) => (
+  const progressBar = (pct, total) => (
     <div style={{ marginBottom: 28 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
         <span style={{ fontSize: 12, color: C.textLight }}>
-          Question {currentQ + 1} of {visibleQuestions.length || 7}
+          Question {currentQ + 1} of {total || visibleQuestions.length || 7}
         </span>
         <span style={{ fontSize: 12, color: C.gold, fontWeight: 600 }}>{Math.round(pct)}%</span>
       </div>
@@ -194,7 +202,6 @@ export default function OnboardingPage() {
     <>
       <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse at 15% 40%, rgba(251,191,36,0.14) 0%, transparent 50%), radial-gradient(ellipse at 85% 30%, rgba(180,83,9,0.08) 0%, transparent 45%)` }} />
       <div style={{ position: 'absolute', inset: 0, backgroundImage: `radial-gradient(rgba(180,83,9,0.08) 1px, transparent 1px)`, backgroundSize: '40px 40px', maskImage: 'radial-gradient(ellipse at center, black 0%, transparent 75%)' }} />
-      {/* Center orbit */}
       <div style={{ position: 'absolute', top: '50%', left: '50%', width: 500, height: 500, marginTop: -250, marginLeft: -250, borderRadius: '50%', border: '1.5px solid rgba(180,83,9,0.12)', animation: 'spin-slow 40s linear infinite', pointerEvents: 'none' }}>
         <div style={{ position: 'absolute', top: -7, left: '50%', transform: 'translateX(-50%)', width: 13, height: 13, borderRadius: '50%', background: 'radial-gradient(circle, #fde68a 20%, #b45309)', boxShadow: '0 0 14px #d97706' }} />
         <div style={{ position: 'absolute', bottom: -5, left: '50%', transform: 'translateX(-50%)', width: 8, height: 8, borderRadius: '50%', background: '#d97706', boxShadow: '0 0 10px rgba(217,119,6,0.5)' }} />
@@ -202,7 +209,6 @@ export default function OnboardingPage() {
       <div style={{ position: 'absolute', top: '50%', left: '50%', width: 340, height: 340, marginTop: -170, marginLeft: -170, borderRadius: '50%', border: '1px dashed rgba(180,83,9,0.08)', animation: 'spin-slow-reverse 55s linear infinite', pointerEvents: 'none' }}>
         <div style={{ position: 'absolute', top: '50%', left: -5, transform: 'translateY(-50%)', width: 9, height: 9, borderRadius: '50%', background: 'radial-gradient(circle, #c4b5fd 20%, #7c3aed)', boxShadow: '0 0 10px rgba(124,58,237,0.5)' }} />
       </div>
-      {/* Top-right orbit */}
       <div style={{ position: 'absolute', top: '2%', right: '3%', width: 240, height: 240, borderRadius: '50%', border: '1.5px solid rgba(180,83,9,0.14)', animation: 'spin-slow 30s linear infinite', pointerEvents: 'none' }}>
         <div style={{ position: 'absolute', top: -6, left: '50%', transform: 'translateX(-50%)', width: 12, height: 12, borderRadius: '50%', background: 'radial-gradient(circle, #fde68a 20%, #b45309)', boxShadow: '0 0 12px #d97706' }} />
         <div style={{ position: 'absolute', top: '50%', right: -5, transform: 'translateY(-50%)', width: 7, height: 7, borderRadius: '50%', background: '#f59e0b', boxShadow: '0 0 8px rgba(245,158,11,0.5)' }} />
@@ -241,37 +247,120 @@ export default function OnboardingPage() {
     setScreen('whatyouknow')
   }
 
+  // ── HANDLER: WHAT YOU KNOW → Generate 7 AI Questions ──────────────────────
   const handleWhatYouKnowNext = async () => {
     if (!whatYouKnow.trim()) return
-    setLoadingMessage('Generating your personalised assessment questions...')
+    setAssessmentError('')
+    setLoadingMessage('Analysing your background...')
+    setLoadingSubMessage('Reading what you know · Identifying your gaps · Crafting 7 questions just for you')
     setScreen('loading')
-    setTimeout(() => {
-      setGeneratedQuestions([
-        `You mentioned some background — what specific ${confirmedGoal?.title} concepts are you most confident about?`,
-        `Have you ever built a real project related to ${confirmedGoal?.title}? Describe it briefly.`,
-        `What is the biggest gap you feel between where you are now and being a ${confirmedGoal?.title}?`,
-        `Which tools or technologies have you actually used hands-on so far?`,
-        `How many hours per week can you realistically dedicate to learning right now?`,
-        `Have you tried learning ${confirmedGoal?.title} before and stopped? What happened?`,
-        `Where do you see yourself in 6 months if you follow this roadmap consistently?`,
-      ])
+
+    try {
+      const result = await generateAssessmentQuestions({
+        goalId:    confirmedGoal?.id         || confirmedGoal?.goalType || 'sde',
+        goalTitle: confirmedGoal?.title      || 'Software Engineer',
+        branch:    branch                    || 'CSE',
+        semester:  typeof semester === 'number' ? semester : parseInt(semester) || 3,
+        whatYouKnow,
+      })
+
+      // Store rich question objects on window so handleAssessNext can access
+      // topic + difficulty per question when building the roadmap payload
+      window.__claripath_assessmentQuestions = result.questions
+
+      // generatedQuestions = just the question strings (what the UI renders)
+      setGeneratedQuestions(result.questions.map(q => q.question))
       setCurrentQ(0)
       setCurrentAnswer('')
       setScreen('assessment')
-    }, 2500)
+
+    } catch (err) {
+      console.error('[AssessmentGenerator] Failed:', err)
+      // Graceful fallback — 3 basic + 4 motivational hardcoded questions
+      // so the flow never breaks even if Gemini is down
+      const goalTitle = confirmedGoal?.title || 'this field'
+      const fallbackQuestions = [
+        { id: 1, question: `What do you think someone working in ${goalTitle} does on a typical day?`, topic: 'General', difficulty: 'BASIC', type: 'TECHNICAL' },
+        { id: 2, question: `Have you come across any terms or topics related to ${goalTitle}? What did you understand about them?`, topic: 'General', difficulty: 'BASIC', type: 'TECHNICAL' },
+        { id: 3, question: `If you had to start learning ${goalTitle} today, what is the first thing you would search for?`, topic: 'General', difficulty: 'BASIC', type: 'TECHNICAL' },
+        { id: 4, question: `Why did you choose ${goalTitle} as your career goal? What excites you about it?`, topic: 'Motivation', difficulty: 'BASIC', type: 'MOTIVATIONAL' },
+        { id: 5, question: `What kind of work do you enjoy most — building things, solving puzzles, analysing data, or designing? Why?`, topic: 'Motivation', difficulty: 'BASIC', type: 'MOTIVATIONAL' },
+        { id: 6, question: `What is your biggest fear or concern about pursuing ${goalTitle} as a career?`, topic: 'Motivation', difficulty: 'BASIC', type: 'MOTIVATIONAL' },
+        { id: 7, question: `Where do you see yourself in 2 years if you follow this roadmap consistently?`, topic: 'Motivation', difficulty: 'BASIC', type: 'MOTIVATIONAL' },
+      ]
+      window.__claripath_assessmentQuestions = fallbackQuestions
+      setGeneratedQuestions(fallbackQuestions.map(q => q.question))
+      setCurrentQ(0)
+      setCurrentAnswer('')
+      setScreen('assessment')
+    }
   }
 
+  // ── HANDLER: ASSESSMENT NEXT → on last Q, generate roadmap ────────────────
   const handleAssessNext = async () => {
     if (!currentAnswer.trim()) return
+
     const updated = { ...assessAnswers, [currentQ]: currentAnswer }
     setAssessAnswers(updated)
     setCurrentAnswer('')
-    if (currentQ + 1 >= generatedQuestions.length) {
-      setLoadingMessage('Building your personalised roadmap...')
-      setScreen('loading')
-      setTimeout(() => navigate('/dashboard'), 3500)
-    } else {
+
+    const isLastQuestion = currentQ + 1 >= generatedQuestions.length
+
+    if (!isLastQuestion) {
       setCurrentQ(currentQ + 1)
+      return
+    }
+
+    // ── Last question submitted → generate roadmap ──────────────────────────
+    setLoadingMessage('Building your personalised 16-week roadmap...')
+    setLoadingSubMessage('Detecting your true level · Aligning with your syllabus · Creating 16 weeks of tasks')
+    setScreen('loading')
+
+    try {
+      // Rebuild full Q&A array with topic + difficulty from stored question objects
+      const storedQuestions = window.__claripath_assessmentQuestions || []
+      const assessmentQnA = generatedQuestions.map((q, i) => ({
+        question:   q,
+        topic:      storedQuestions[i]?.topic      || 'General',
+        difficulty: storedQuestions[i]?.difficulty || 'BASIC',
+        type:       storedQuestions[i]?.type       || 'TECHNICAL',
+        answer:     updated[i]                     || '',
+      }))
+
+      const userId = user?.id || user?.userId || localStorage.getItem('userId') || 'guest'
+
+      const { roadmapId, levelData } = await generateAndSaveRoadmap({
+        userId,
+        goalId:      confirmedGoal?.id        || confirmedGoal?.goalType || 'sde',
+        goalTitle:   confirmedGoal?.title     || 'Software Engineer',
+        branch:      branch                   || 'CSE',
+        semester:    typeof semester === 'number' ? semester : parseInt(semester) || 3,
+        hoursPerWeek,
+        mode,
+        whatYouKnow,
+        assessmentQnA,
+      })
+
+      // Navigate to dashboard — roadmap is saved in DB, DashboardPage fetches it
+      navigate('/dashboard', {
+        state: {
+          freshRoadmap: true,
+          roadmapId,
+          trueLevel:  levelData.trueLevel,
+          goalTitle:  confirmedGoal?.title,
+        }
+      })
+
+    } catch (err) {
+      console.error('[RoadmapGenerator] Failed:', err)
+      // Even if roadmap generation fails, still go to dashboard
+      // Dashboard will show its hardcoded fallback data
+      navigate('/dashboard', {
+        state: {
+          freshRoadmap: false,
+          error: 'Roadmap generation failed — showing default roadmap. You can retry from settings.',
+        }
+      })
     }
   }
 
@@ -303,34 +392,24 @@ export default function OnboardingPage() {
     <div style={{ ...pageBg, alignItems: 'center' }}>
       <style>{sharedStyle}</style>
       <BgDecor />
-
       <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 660, textAlign: 'center' }}>
-
-        {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 48 }}>
           <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, #b45309, #d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(180,83,9,0.3)' }}>
             <span className="playfair" style={{ color: 'white', fontWeight: 900, fontSize: 18 }}>C</span>
           </div>
           <span className="playfair" style={{ color: C.text, fontWeight: 800, fontSize: 20 }}>ClariPath</span>
         </div>
-
-        {/* Badge */}
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 16px', borderRadius: 100, background: C.goldBg, border: `1px solid ${C.goldBorder}`, color: C.gold, fontSize: 12, fontWeight: 600, marginBottom: 22, letterSpacing: '0.04em' }}>
           <span style={{ width: 5, height: 5, borderRadius: '50%', background: C.gold, display: 'inline-block' }} />
           YOUR JOURNEY STARTS HERE
         </div>
-
-        {/* Headline */}
         <h1 className="playfair" style={{ fontSize: 'clamp(2rem, 5vw, 3.2rem)', fontWeight: 900, color: C.text, lineHeight: 1.15, letterSpacing: '-0.03em', marginBottom: 18 }}>
           The next 5 minutes will{' '}
           <span className="gold-text">shape your entire roadmap</span>
         </h1>
-
         <p style={{ fontSize: 16, color: C.textMid, lineHeight: 1.7, maxWidth: 500, margin: '0 auto 40px' }}>
           We are about to ask you a few questions. Your answers will be used to build a personalised 16-week roadmap — one that no other student will have.
         </p>
-
-        {/* 3 promise cards */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 32 }}>
           {[
             { icon: '🎯', title: 'Be honest', desc: 'There are no right or wrong answers. The system works better when you are real.' },
@@ -344,8 +423,6 @@ export default function OnboardingPage() {
             </div>
           ))}
         </div>
-
-        {/* What happens next */}
         <div style={{ padding: '22px 28px', borderRadius: 18, background: C.white, border: `1px solid ${C.border}`, marginBottom: 36, textAlign: 'left', boxShadow: '0 2px 10px rgba(0,0,0,0.04)' }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.textLight, marginBottom: 16, letterSpacing: '0.08em' }}>WHAT HAPPENS NEXT</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -365,8 +442,6 @@ export default function OnboardingPage() {
             ))}
           </div>
         </div>
-
-        {/* CTA */}
         <button className="ob-btn" onClick={() => setScreen('intro')}
           style={{ ...btn, maxWidth: 400, margin: '0 auto', display: 'block', padding: '15px 32px', fontSize: 15, fontWeight: 800 }}>
           I am ready — Let's begin →
@@ -385,14 +460,12 @@ export default function OnboardingPage() {
       <BgDecor />
       <div style={{ ...card, maxWidth: 600, zIndex: 1 }}>
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, transparent, ${C.gold}, transparent)` }} />
-
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
           <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #b45309, #d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <span className="playfair" style={{ color: 'white', fontWeight: 900, fontSize: 15 }}>C</span>
           </div>
           <span className="playfair" style={{ color: C.text, fontWeight: 800, fontSize: 17 }}>ClariPath</span>
         </div>
-
         <h2 style={title}>Let's find your path</h2>
         <p style={subtitle}>Tell us a bit about yourself so we can build a roadmap made specifically for you.</p>
 
@@ -519,42 +592,48 @@ export default function OnboardingPage() {
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 14px', borderRadius: 100, background: C.goldBg, border: `1px solid ${C.goldBorder}`, color: C.gold, fontSize: 12, fontWeight: 600, marginBottom: 14 }}>
             <span style={{ width: 5, height: 5, borderRadius: '50%', background: C.gold, display: 'inline-block' }} />
-            Based on your answers
+            {clarity === 'yes' ? 'Choose your goal' : 'Based on your answers'}
           </div>
           <h2 className="playfair" style={{ fontSize: 30, fontWeight: 900, color: C.text, marginBottom: 8, letterSpacing: '-0.02em' }}>
-            Here are your career matches
+            {clarity === 'yes' ? 'Select your career goal' : 'Here are your career matches'}
           </h2>
           <p style={{ fontSize: 14, color: C.textLight }}>Tap any goal to learn more before deciding</p>
         </div>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '0 16px 48px' }}>
           {goals.map((goal, i) => (
             <button key={goal.id} className="goal-card"
               onClick={() => { setDetailGoal(goal); setScreen('goal-detail') }}
               style={{
                 padding: '18px 22px', borderRadius: 16, cursor: 'pointer', textAlign: 'left',
-                border: `1.5px solid ${i === 0 ? C.gold + '50' : C.border}`,
-                background: i === 0 ? C.goldBg : C.white,
+                border: `1.5px solid ${(clarity !== 'yes' && i === 0) ? C.gold + '50' : C.border}`,
+                background: (clarity !== 'yes' && i === 0) ? C.goldBg : C.white,
                 position: 'relative', overflow: 'hidden',
-                boxShadow: i === 0 ? '0 4px 20px rgba(180,83,9,0.1)' : '0 2px 8px rgba(0,0,0,0.04)',
+                boxShadow: (clarity !== 'yes' && i === 0) ? '0 4px 20px rgba(180,83,9,0.1)' : '0 2px 8px rgba(0,0,0,0.04)',
                 transition: 'all 0.25s ease',
               }}>
-              {i === 0 && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2.5, background: `linear-gradient(90deg, transparent, ${C.gold}, transparent)` }} />}
+              {clarity !== 'yes' && i === 0 && (
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2.5, background: `linear-gradient(90deg, transparent, ${C.gold}, transparent)` }} />
+              )}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div style={{ width: 46, height: 46, borderRadius: 12, background: i === 0 ? 'rgba(180,83,9,0.1)' : C.bgAlt, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, border: `1px solid ${i === 0 ? C.goldBorder : C.border}` }}>
+                  <div style={{ width: 46, height: 46, borderRadius: 12,
+                    background: (clarity !== 'yes' && i === 0) ? 'rgba(180,83,9,0.1)' : C.bgAlt,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
+                    border: `1px solid ${(clarity !== 'yes' && i === 0) ? C.goldBorder : C.border}` }}>
                     {goal.icon || '🎯'}
                   </div>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
                       <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{goal.title}</span>
-                      {i === 0 && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: C.gold + '18', color: C.gold, border: `1px solid ${C.gold}30` }}>TOP MATCH</span>}
+                      {clarity !== 'yes' && i === 0 && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: C.gold + '18', color: C.gold, border: `1px solid ${C.gold}30` }}>TOP MATCH</span>
+                      )}
                     </div>
                     <span style={{ fontSize: 12, color: C.textLight }}>{goal.domain}</span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
-                  {goal.matchPercent > 0 && (
+                  {clarity !== 'yes' && goal.matchPercent > 0 && (
                     <span style={{ fontSize: 16, fontWeight: 800, color: i === 0 ? C.gold : C.textLight, fontFamily: "'Playfair Display', serif" }}>{goal.matchPercent}%</span>
                   )}
                   <span style={{ fontSize: 11, color: C.textLight }}>Tap to explore →</span>
@@ -567,37 +646,30 @@ export default function OnboardingPage() {
     </div>
   )
 
- // ── SCREEN: GOAL DETAIL ──
+  // ── SCREEN: GOAL DETAIL ──
   if (screen === 'goal-detail' && detailGoal) return (
     <div style={{ minHeight: '100vh', background: C.bg, padding: '0 0 60px 0', position: 'relative', overflow: 'hidden' }}>
       <BgDecor />
       <style>{sharedStyle}</style>
       <div style={{ position: 'relative', zIndex: 10, maxWidth: 700, margin: '0 auto', padding: '40px 24px 0' }}>
-
         <button onClick={() => setScreen('goals')}
-          style={{ background: 'none', border: 'none', color: C.gold, fontFamily: 'DM Sans, sans-serif',
-            fontSize: 14, cursor: 'pointer', marginBottom: 28, display: 'flex', alignItems: 'center', gap: 6 }}>
+          style={{ background: 'none', border: 'none', color: C.gold, fontFamily: 'DM Sans, sans-serif', fontSize: 14, cursor: 'pointer', marginBottom: 28, display: 'flex', alignItems: 'center', gap: 6 }}>
           ← Back to all goals
         </button>
-
-        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 20,
-          padding: '28px 32px', marginBottom: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
+        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 20, padding: '28px 32px', marginBottom: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 16 }}>
-            <div style={{ width: 56, height: 56, background: C.goldBg, borderRadius: 14,
-              border: `1px solid ${C.goldBorder}`, flexShrink: 0 }} />
+            <div style={{ width: 56, height: 56, background: C.goldBg, borderRadius: 14, border: `1px solid ${C.goldBorder}`, flexShrink: 0 }} />
             <div>
               <h2 style={{ fontFamily: 'Playfair Display, serif', fontSize: 26, fontWeight: 700, color: C.text, margin: 0 }}>{detailGoal.title}</h2>
               <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 14, color: C.textLight, margin: '4px 0 0' }}>{detailGoal.field || detailGoal.domain}</p>
             </div>
           </div>
           {detailGoal.fieldOverview && (
-            <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 15, color: C.textMid,
-              lineHeight: 1.7, margin: 0, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+            <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 15, color: C.textMid, lineHeight: 1.7, margin: 0, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
               {detailGoal.fieldOverview}
             </p>
           )}
         </div>
-
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
           <DetailCard icon="📚" label="What will you learn?" value={detailGoal.whatYouLearn} C={C} />
           <DetailCard icon="💼" label="What will you do daily?" value={detailGoal.whatYouDo} C={C} />
@@ -610,21 +682,15 @@ export default function OnboardingPage() {
           <DetailCard icon="👤" label="Primary job roles" value={detailGoal.primaryRoles} C={C} />
           <DetailCard icon="🚀" label="Where you start" value={detailGoal.entryLevelRole} C={C} />
         </div>
-
         {detailGoal.careerPath && (
-          <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 16,
-            padding: '18px 22px', marginBottom: 14, boxShadow: '0 1px 6px rgba(0,0,0,0.04)' }}>
-            <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 12, fontWeight: 600,
-              color: C.gold, textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 10px' }}>
+          <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 16, padding: '18px 22px', marginBottom: 14, boxShadow: '0 1px 6px rgba(0,0,0,0.04)' }}>
+            <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 12, fontWeight: 600, color: C.gold, textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 10px' }}>
               📈 Long-term career path
             </p>
             <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
               {detailGoal.careerPath.split('→').map((step, i, arr) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ background: i === 0 ? C.goldBg : C.bgAlt,
-                    border: `1px solid ${i === 0 ? C.goldBorder : C.border}`,
-                    borderRadius: 20, padding: '4px 12px', fontFamily: 'DM Sans, sans-serif',
-                    fontSize: 13, color: i === 0 ? C.gold : C.textMid, fontWeight: i === 0 ? 600 : 400 }}>
+                  <span style={{ background: i === 0 ? C.goldBg : C.bgAlt, border: `1px solid ${i === 0 ? C.goldBorder : C.border}`, borderRadius: 20, padding: '4px 12px', fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: i === 0 ? C.gold : C.textMid, fontWeight: i === 0 ? 600 : 400 }}>
                     {step.trim()}
                   </span>
                   {i < arr.length - 1 && <span style={{ color: C.textLight, fontSize: 14 }}>→</span>}
@@ -633,46 +699,34 @@ export default function OnboardingPage() {
             </div>
           </div>
         )}
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-          <DetailCard icon="💰" label="Salary range" value={detailGoal.salaryRange} C={C} highlight />
+        <div style={{ marginBottom: 14 }}>
           <DetailCard icon="📊" label="Career scope & growth" value={detailGoal.careerScope} C={C} />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
           <DetailCard icon="🎓" label="Relevant subjects" value={detailGoal.academicRelevance} C={C} />
           <DetailCard icon="✅" label="Best suited for" value={detailGoal.whoShouldChoose} C={C} />
         </div>
-
         {detailGoal.topCompanies && (
-          <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 16,
-            padding: '18px 22px', marginBottom: 28, boxShadow: '0 1px 6px rgba(0,0,0,0.04)' }}>
-            <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 12, fontWeight: 600,
-              color: C.gold, textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 10px' }}>
+          <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 16, padding: '18px 22px', marginBottom: 28, boxShadow: '0 1px 6px rgba(0,0,0,0.04)' }}>
+            <p style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 12, fontWeight: 600, color: C.gold, textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 10px' }}>
               🏢 Top companies hiring
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {detailGoal.topCompanies.split(',').map((c, i) => (
-                <span key={i} style={{ background: C.bgAlt, border: `1px solid ${C.border}`,
-                  borderRadius: 20, padding: '4px 12px',
-                  fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: C.textMid }}>
+                <span key={i} style={{ background: C.bgAlt, border: `1px solid ${C.border}`, borderRadius: 20, padding: '4px 12px', fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: C.textMid }}>
                   {c.trim()}
                 </span>
               ))}
             </div>
           </div>
         )}
-
-        <button onClick={() => { setConfirmedGoal(detailGoal); setScreen('whatyouknow'); }}
-          style={{ width: '100%', padding: '16px', background: `linear-gradient(135deg, ${C.gold}, ${C.goldLight})`,
-            color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'DM Sans, sans-serif',
-            fontSize: 16, fontWeight: 600, cursor: 'pointer', letterSpacing: 0.3 }}>
+        <button onClick={() => { setConfirmedGoal(detailGoal); setScreen('whatyouknow') }}
+          style={{ width: '100%', padding: '16px', background: `linear-gradient(135deg, ${C.gold}, ${C.goldLight})`, color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'DM Sans, sans-serif', fontSize: 16, fontWeight: 600, cursor: 'pointer', letterSpacing: 0.3 }}>
           Yes, this is my goal — Start assessment →
         </button>
-
       </div>
     </div>
   )
-
 
   // ── SCREEN: WHAT YOU KNOW ──
   if (screen === 'whatyouknow') return (
@@ -714,7 +768,7 @@ export default function OnboardingPage() {
 
   // ── SCREEN: ASSESSMENT ──
   if (screen === 'assessment') {
-    const pct = (currentQ / generatedQuestions.length) * 100
+    const pct = ((currentQ) / generatedQuestions.length) * 100
     return (
       <div style={{ ...pageBg, alignItems: 'center' }}>
         <style>{sharedStyle}</style>
@@ -725,12 +779,15 @@ export default function OnboardingPage() {
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 100, background: '#f5f3ff', border: '1px solid #ddd6fe', color: '#7c3aed', fontSize: 11, fontWeight: 600, marginBottom: 18 }}>
               Skill Assessment — {confirmedGoal?.title}
             </div>
-            {progressBar(pct)}
+            {progressBar(pct, generatedQuestions.length)}
             <h2 style={{ ...title, fontSize: 18, marginBottom: 20, lineHeight: 1.5 }}>
               {generatedQuestions[currentQ]}
             </h2>
             <textarea className="ob-input" value={currentAnswer} onChange={e => setCurrentAnswer(e.target.value)}
               placeholder="Type your answer here..." rows={5} style={inputStyle} />
+            {assessmentError && (
+              <p style={{ fontSize: 12, color: '#dc2626', marginTop: 8, marginBottom: 0 }}>{assessmentError}</p>
+            )}
             <button className="ob-btn" onClick={handleAssessNext}
               style={currentAnswer.trim() ? btn : btnOff}
               disabled={!currentAnswer.trim()}>
@@ -754,10 +811,12 @@ export default function OnboardingPage() {
             <path style={{ opacity: 0.75 }} fill="white" d="M4 12a8 8 0 018-8v8z" />
           </svg>
         </div>
-        <div style={{ textAlign: 'center', maxWidth: 360 }}>
-          <h2 className="playfair" style={{ fontSize: 22, fontWeight: 900, color: C.text, marginBottom: 10 }}>{loadingMessage}</h2>
+        <div style={{ textAlign: 'center', maxWidth: 400 }}>
+          <h2 className="playfair" style={{ fontSize: 22, fontWeight: 900, color: C.text, marginBottom: 10 }}>
+            {loadingMessage}
+          </h2>
           <p style={{ fontSize: 14, color: C.textLight, lineHeight: 1.65 }}>
-            This takes a few seconds. We are analysing everything you told us to build something truly personalised.
+            {loadingSubMessage || 'This takes a few seconds. We are analysing everything you told us to build something truly personalised.'}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>

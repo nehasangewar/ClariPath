@@ -43,7 +43,6 @@ const EyeButton = ({ show, toggle }) => (
   </button>
 )
 
-// Chevron icon for selects
 const ChevronDown = () => (
   <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
     style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: C.textLight }}>
@@ -71,14 +70,12 @@ function RegisterPage() {
 
   const navigate = useNavigate()
 
-  // Load universities on mount
   useEffect(() => {
     api.get('/api/universities')
       .then(res => setUniversities(res.data))
       .catch(() => {})
   }, [])
 
-  // Load colleges when university changes
   useEffect(() => {
     if (!universityId) { setColleges([]); setCollegeId(''); return }
     setLoadingColleges(true)
@@ -160,7 +157,6 @@ function RegisterPage() {
         <div style={{ position:'absolute', inset:0, background:`radial-gradient(ellipse at 20% 30%, rgba(251,191,36,0.2) 0%, transparent 50%), radial-gradient(ellipse at 80% 70%, rgba(180,83,9,0.1) 0%, transparent 45%)` }} />
         <div style={{ position:'absolute', inset:0, backgroundImage:`radial-gradient(rgba(180,83,9,0.1) 1px, transparent 1px)`, backgroundSize:'36px 36px', maskImage:'radial-gradient(ellipse at center, black 20%, transparent 80%)' }} />
 
-        {/* Orbit 1 */}
         <div style={{ position:'absolute', top:'50%', left:'50%', width:400, height:400, marginTop:-200, marginLeft:-200, borderRadius:'50%', border:'1.5px solid rgba(180,83,9,0.18)', animation:'spin-slow 38s linear infinite' }}>
           <div style={{ position:'absolute', top:-8, left:'50%', transform:'translateX(-50%)', width:15, height:15, borderRadius:'50%', background:'radial-gradient(circle, #fde68a 20%, #b45309)', boxShadow:'0 0 16px #d97706, 0 0 30px rgba(180,83,9,0.3)' }} />
           <div style={{ position:'absolute', bottom:-6, left:'50%', transform:'translateX(-50%)', width:9, height:9, borderRadius:'50%', background:'#d97706', boxShadow:'0 0 10px rgba(217,119,6,0.5)' }} />
@@ -172,7 +168,6 @@ function RegisterPage() {
         </div>
         <div style={{ position:'absolute', top:'50%', left:'50%', width:140, height:140, marginTop:-70, marginLeft:-70, borderRadius:'50%', background:'radial-gradient(circle, rgba(251,191,36,0.12), rgba(180,83,9,0.04), transparent 70%)', filter:'blur(10px)', animation:'drift 10s ease-in-out infinite' }} />
 
-        {/* Orbit 2 — top right */}
         <div style={{ position:'absolute', top:'2%', right:'-3%', width:210, height:210, borderRadius:'50%', border:'1.5px solid rgba(180,83,9,0.16)', animation:'spin-slow 28s linear infinite' }}>
           <div style={{ position:'absolute', top:-7, left:'50%', transform:'translateX(-50%)', width:13, height:13, borderRadius:'50%', background:'radial-gradient(circle, #fde68a 20%, #b45309)', boxShadow:'0 0 14px #d97706' }} />
           <div style={{ position:'absolute', top:'50%', right:-5, transform:'translateY(-50%)', width:8, height:8, borderRadius:'50%', background:'#f59e0b', boxShadow:'0 0 8px rgba(245,158,11,0.5)' }} />
@@ -182,7 +177,6 @@ function RegisterPage() {
         </div>
         <div style={{ position:'absolute', top:'4%', right:'1%', width:110, height:110, borderRadius:'50%', background:'radial-gradient(circle, rgba(180,83,9,0.09), transparent)', filter:'blur(14px)', animation:'drift 10s ease-in-out infinite 2s' }} />
 
-        {/* Content */}
         <div style={{ position:'relative', zIndex:10 }}>
           <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:48 }}>
             <div style={{ width:40, height:40, borderRadius:12, background:'linear-gradient(135deg,#b45309,#d97706)', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 14px rgba(180,83,9,0.3)' }}>
@@ -227,10 +221,6 @@ function RegisterPage() {
 
           {/* Header */}
           <div style={{ marginBottom:28 }}>
-            <div style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'4px 12px', borderRadius:100, background:C.goldBg, border:`1px solid ${C.goldBorder}`, marginBottom:14 }}>
-              <span style={{ width:5, height:5, borderRadius:'50%', background:C.gold, display:'inline-block' }} />
-              <span style={{ color:C.gold, fontSize:11, fontWeight:600, letterSpacing:'0.04em' }}>Free forever to start</span>
-            </div>
             <h3 className="playfair" style={{ fontSize:28, fontWeight:900, color:C.text, marginBottom:6, letterSpacing:'-0.02em' }}>Create your account</h3>
             <p style={{ fontSize:14, color:C.textLight }}>Get your personalised roadmap in under 10 minutes</p>
           </div>
@@ -244,7 +234,7 @@ function RegisterPage() {
 
           <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
 
-            {/* First / Middle / Last Name — all in one row */}
+            {/* First / Middle / Last Name */}
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10 }}>
               <div>
                 <label style={labelStyle}>First Name <Req /></label>
@@ -264,10 +254,7 @@ function RegisterPage() {
             <div>
               <label style={labelStyle}>University <Req /></label>
               <div style={{ position:'relative' }}>
-                <select
-                  className="reg-select"
-                  value={universityId}
-                  onChange={e => setUniversityId(e.target.value)}
+                <select className="reg-select" value={universityId} onChange={e => setUniversityId(e.target.value)}
                   style={{ ...inputStyle, paddingRight:36, cursor:'pointer', color: universityId ? C.text : '#a8a29e' }}>
                   <option value="" disabled hidden>Select your university</option>
                   {universities.map(u => (
@@ -278,22 +265,13 @@ function RegisterPage() {
               </div>
             </div>
 
-            {/* College — locked until university is selected */}
+            {/* College */}
             <div>
               <label style={labelStyle}>College <Req /></label>
               <div style={{ position:'relative' }}>
-                <select
-                  className="reg-select"
-                  value={collegeId}
-                  onChange={e => setCollegeId(e.target.value)}
+                <select className="reg-select" value={collegeId} onChange={e => setCollegeId(e.target.value)}
                   disabled={!universityId || loadingColleges}
-                  style={{
-                    ...inputStyle,
-                    paddingRight:36, cursor: (!universityId || loadingColleges) ? 'not-allowed' : 'pointer',
-                    color: collegeId ? C.text : '#a8a29e',
-                    opacity: !universityId ? 0.6 : 1,
-                    background: !universityId ? C.bgAlt : C.white,
-                  }}>
+                  style={{ ...inputStyle, paddingRight:36, cursor: (!universityId || loadingColleges) ? 'not-allowed' : 'pointer', color: collegeId ? C.text : '#a8a29e', opacity: !universityId ? 0.6 : 1, background: !universityId ? C.bgAlt : C.white }}>
                   <option value="" disabled hidden>
                     {loadingColleges ? 'Loading colleges...' : !universityId ? 'Select university first' : 'Select your college'}
                   </option>
@@ -323,7 +301,6 @@ function RegisterPage() {
                 <input className="reg-input" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Min 8 characters" style={{ ...inputStyle, paddingRight:'44px' }} />
                 <EyeButton show={showPassword} toggle={() => setShowPassword(!showPassword)} />
               </div>
-              {/* Strength meter */}
               {password.length > 0 && (() => {
                 let score = 0
                 if (password.length >= 8) score++
