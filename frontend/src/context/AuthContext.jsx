@@ -29,8 +29,14 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('user')
   }
 
+  const completeOnboarding = () => {
+    const updated = { ...user, onboardingComplete: true }
+    setUser(updated)
+    localStorage.setItem('user', JSON.stringify(updated))
+  }
+
   return (
-    <AuthContext.Provider value={{ user, token, login, logout }}>
+    <AuthContext.Provider value={{ user, token, login, logout, completeOnboarding }}>
       {children}
     </AuthContext.Provider>
   )

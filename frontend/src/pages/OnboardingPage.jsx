@@ -340,6 +340,10 @@ export default function OnboardingPage() {
         whatYouKnow,
         assessmentQnA,
       })
+       
+      const { completeOnboarding } = useAuth()
+
+
 
       // Navigate to dashboard — roadmap is saved in DB, DashboardPage fetches it
       navigate('/dashboard', {

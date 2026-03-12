@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import api from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 const C = {
   bg: '#f5f0e8', bgAlt: '#ede8df', text: '#1c1917', textMid: '#44403c',
@@ -69,6 +70,7 @@ function RegisterPage() {
   const [loadingColleges, setLoadingColleges] = useState(false)
 
   const navigate = useNavigate()
+  const { login } = useAuth()
 
   useEffect(() => {
     api.get('/api/universities')
@@ -100,8 +102,17 @@ function RegisterPage() {
       const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ')
       const selectedCollege = colleges.find(c => c.id === parseInt(collegeId))
       const collegeName = selectedCollege ? selectedCollege.name : ''
-      await api.post('/api/auth/register', { name: fullName, college: collegeName, collegeId: parseInt(collegeId), universityId: parseInt(universityId), email, password })
-      navigate('/login')
+      const res = await api.post('/api/auth/register', {
+        name: fullName,
+        college: collegeName,
+        collegeId: parseInt(collegeId),
+        universityId: parseInt(universityId),
+        email,
+        password
+      })
+      // Auto-login after registration and go straight to onboarding
+      login(res.data.user, res.data.token)
+      navigate('/onboarding')
     } catch {
       setError('Registration failed. Please try again.')
     } finally {
