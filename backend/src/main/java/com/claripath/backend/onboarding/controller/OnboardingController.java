@@ -2,54 +2,34 @@ package com.claripath.backend.onboarding.controller;
 
 import com.claripath.backend.onboarding.dto.GenerateRoadmapRequest;
 import com.claripath.backend.onboarding.service.OnboardingService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import com.claripath.backend.service.SyllabusService;
-
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/onboarding")
+@CrossOrigin(origins = "http://localhost:5173")
 public class OnboardingController {
 
     private final OnboardingService onboardingService;
-    private final SyllabusService syllabusService;
 
-    public OnboardingController(OnboardingService onboardingService,
-                                SyllabusService syllabusService) {
+    public OnboardingController(OnboardingService onboardingService) {
         this.onboardingService = onboardingService;
-        this.syllabusService = syllabusService;
     }
 
     @PostMapping("/generate-roadmap")
-    public String generateRoadmap(@RequestBody GenerateRoadmapRequest request) throws Exception {
-
-        // 1. Fetch syllabus context from DB based on student's college, branch, semester
-        String syllabusContext = syllabusService.getSyllabusContext(
-                request.getCollegeId(),
-                request.getBranchId(),
-                request.getSemester()
-        );
-
-        // 2. Build prompt with syllabus injected
-        String prompt = "You are an expert computer science educator. " +
-                "A student has provided the following details: " +
-                "Branch: " + request.getBranch() + ". " +
-                "Semester: " + request.getSemester() + ". " +
-                "Career Goal: " + request.getConfirmedGoal() + ". " +
-                "Current Knowledge: " + request.getWhatYouKnow() + ". " +
-                "Assessment Answers: " + request.getAssessmentAnswers() + ". " +
-
-                // ✅ SYLLABUS INJECTED HERE
-                "The student's college syllabus for this semester is as follows. " +
-                "You MUST align the roadmap tasks with these syllabus topics wherever relevant. " +
-                "Do not ignore subjects the student is currently studying in college. " +
-                syllabusContext + ". " +
-
-                "Generate a 16-week personalized learning roadmap divided into 4 phases. " +
-                "Return ONLY raw JSON with no markdown, no explanation, no code fences. " +
-                "The JSON must follow this exact structure: " +
-                "{\"phases\": [{\"phase_number\": 1, \"phase_goal\": \"string\", \"weeks\": [{\"week_number\": 1, \"weekly_focus\": \"string\", \"tasks\": [{\"id\": \"t1\", \"title\": \"string\", \"description\": \"string\", \"resource_name\": \"string\", \"resource_url\": \"string\", \"estimated_hours\": 3, \"difficulty\": \"EASY\"}]}]}]}. " +
-                "Return exactly 4 phases, 4 weeks per phase, 3 tasks per week. Difficulty must be EASY, MEDIUM, or HARD only.";
-
-        return onboardingService.generateRoadmapFromAI(prompt, request.getUserId());
+    public ResponseEntity<?> generateRoadmap(@RequestBody GenerateRoadmapRequest request) {
+        try {
+            String saved = onboardingService.saveRoadmap(
+                request.getRoadmapJson(),
+                request.getUserId(),
+                request.getBranch(),
+                request.getSemester(),
+                request.getCollege()
+            );
+            return ResponseEntity.ok(Map.of("success", true, "roadmapJson", saved));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("success", false, "message", e.getMessage()));
+        }
     }
 }

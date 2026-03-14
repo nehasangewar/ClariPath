@@ -7,6 +7,7 @@ import RegisterPage from './pages/RegisterPage'
 import OnboardingPage from './pages/OnboardingPage'
 import DashboardPage from './pages/DashboardPage'
 
+
 function App() {
   return (
     <AuthProvider>

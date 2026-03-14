@@ -29,16 +29,26 @@ function LoginPage() {
   setLoading(true); setError('')
   try {
     const res = await api.post('/api/auth/login', { email, password })
-    login(res.data.user, res.data.token)
-    const profileRes = await api.get('/api/profile/me')
+    
+    // ── Wait for login + roadmap check to complete ──
+    await login(res.data.user, res.data.token)
+
+    // ── Check profile status from backend ──
+    const profileRes = await api.get('/api/profile/me', {
+      headers: { Authorization: `Bearer ${res.data.token}` }
+    })
+
     if (profileRes.data.status === 'ONBOARDING') {
       navigate('/onboarding')
     } else {
       navigate('/dashboard')
     }
+
   } catch {
     setError('Invalid email or password. Please try again.')
-  } finally { setLoading(false) }
+  } finally { 
+    setLoading(false) 
+  }
 }
 
   const handleForgot = async () => {

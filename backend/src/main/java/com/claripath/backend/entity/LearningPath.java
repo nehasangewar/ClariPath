@@ -28,6 +28,19 @@ public class LearningPath {
 
     @Column(name = "order_no")
     private Integer orderNo;
+    @Column(name = "resource")
+private String resource;
+
+@Column(name = "tags")
+private String tags; // stored as comma-separated e.g. "Trees,BFS,DFS"
+
+// Add getters
+public String getResource() { return resource; }
+public String getTags() { return tags; }
+
+// Add setters
+public void setResource(String resource) { this.resource = resource; }
+public void setTags(String tags) { this.tags = tags; }
 
     private Boolean completed = false;
 

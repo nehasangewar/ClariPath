@@ -34,70 +34,64 @@ public class AuthService {
         this.authenticationManager = authenticationManager;
     }
 
-    // ===============================
-    // REGISTER
-    // ===============================
-    public AuthResponse register(RegisterRequest request) {
+    // ── helper to build UserInfo from User entity ──
+    private AuthResponse.UserInfo buildUserInfo(User user) {
+        return new AuthResponse.UserInfo(
+            user.getId(),
+            user.getName(),
+            user.getEmail(),
+            user.getRole().name(),
+            user.getCollege(),
+            user.getBranch(),
+            user.getSemester(),
+            user.getStreak(),
+            user.getBio(),
+            user.getGithub(),
+            user.getLinkedin(),
+            user.getLeetcode(),
+            user.getTrueLevel(),
+            user.getStartPoint(),
+            user.getTrackStatus(),
+            user.getSkippedTopics()
+        );
+    }
 
-        // Check if email already exists
+    public AuthResponse register(RegisterRequest request) {
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             throw new RuntimeException("Email already registered");
         }
 
-        // Create user
         User user = new User();
         user.setName(request.getName());
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setRole(Role.STUDENT);
 
-        // Save user
         User savedUser = userRepository.save(user);
 
-        // Create student profile
         StudentProfile profile = new StudentProfile();
         profile.setUser(savedUser);
         profile.setStatus("ONBOARDING");
         studentProfileRepository.save(profile);
 
-        // Generate JWT
         String token = jwtService.generateToken(savedUser.getEmail());
 
-        // Build and return AuthResponse
-        AuthResponse.UserInfo userInfo = new AuthResponse.UserInfo(
-                savedUser.getId(),
-                savedUser.getName(),
-                savedUser.getEmail(),
-                savedUser.getRole().name()
-        );
-
-        return new AuthResponse(token, userInfo);
+        return new AuthResponse(token, buildUserInfo(savedUser));
     }
 
-    // ===============================
-    // LOGIN
-    // ===============================
     public AuthResponse login(LoginRequest request) {
         authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.getEmail(),
-                        request.getPassword()
-                )
+            new UsernamePasswordAuthenticationToken(
+                request.getEmail(),
+                request.getPassword()
+            )
         );
 
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+            .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // ✅ FIXED — pass role into token
         String token = jwtService.generateToken(user.getEmail(), user.getRole().name());
 
-        AuthResponse.UserInfo userInfo = new AuthResponse.UserInfo(
-                user.getId(),
-                user.getName(),
-                user.getEmail(),
-                user.getRole().name()
-        );
-
-        return new AuthResponse(token, userInfo);
+        return new AuthResponse(token, buildUserInfo(user));
     }
 }

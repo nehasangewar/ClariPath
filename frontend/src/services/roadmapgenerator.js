@@ -1,9 +1,44 @@
 // ─── Roadmap Generator ────────────────────────────────────────────────────────
-// Takes all student context + 7 assessment Q&A → Gemini → 16-week roadmap JSON
-// Output shape matches Dashboard App.jsx FULL_ROADMAP + INIT_TASKS structure
 
-import { callGeminiJSON } from './gemini'
 import { getSyllabusContext } from '../utils/syllabusData'
+
+async function callGeminiJSON(system, userPrompt) {
+  const API_KEY = import.meta.env.VITE_GEMINI_API_KEY
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: `${system}\n\n${userPrompt}` }] }]
+      })
+    })
+
+    if (res.status === 429 || res.status === 503) {
+      if (attempt < 3) {
+        const wait = 5000 * (attempt + 1)
+        console.warn(`Gemini ${res.status} — retrying in ${wait / 1000}s... (attempt ${attempt + 1})`)
+        await new Promise(r => setTimeout(r, wait))
+        continue
+      }
+      throw new Error(`Gemini unavailable (${res.status}). Please wait a moment and try again.`)
+    }
+
+    const data = await res.json()
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+
+    if (!text) throw new Error('Gemini returned empty response. Please try again.')
+
+    const cleaned = text.replace(/^```[\w]*\n?/m, '').replace(/```$/m, '').trim()
+
+    try {
+      return JSON.parse(cleaned)
+    } catch {
+      throw new Error('Gemini response was not valid JSON. Please try again.')
+    }
+  }
+}
 
 const SYSTEM = `You are an expert career roadmap architect for Indian engineering students.
 Build a highly personalized 16-week semester roadmap.
@@ -123,21 +158,8 @@ Step 6 — Never exceed ${hoursPerWeek}h total task hours per week
 Step 7 — Set 4 concrete milestones (week 4, 8, 12, 16)`
 }
 
-/**
- * generateRoadmap
- * @param {object} params
- * @param {string}   params.goalId
- * @param {string}   params.goalTitle
- * @param {string}   params.branch
- * @param {number}   params.semester
- * @param {number}   params.hoursPerWeek
- * @param {string}   params.mode           'Placement' | 'Internship' | 'Skill Building'
- * @param {string}   params.whatYouKnow
- * @param {Array}    params.assessmentQnA  [{question, answer, topic, level}]
- * @returns {Promise<object>}  Full roadmap JSON
- */
 export async function generateAndSaveRoadmap({
-  goalId, goalTitle, branch, semester,
+  userId, goalId, goalTitle, branch, semester,
   hoursPerWeek, mode, whatYouKnow, assessmentQnA
 }) {
   const syllabusContext = getSyllabusContext(branch, semester)
@@ -150,29 +172,47 @@ export async function generateAndSaveRoadmap({
 
   const roadmap = await callGeminiJSON(SYSTEM, userPrompt)
 
-  // Validate
   if (!roadmap.phases || roadmap.phases.length !== 4) {
     throw new Error('Roadmap generation failed: expected 4 phases in response.')
   }
 
-  // Mark Week 1 as current, everything else not done
   roadmap.phases = roadmap.phases.map((phase, pi) => ({
     ...phase,
     completion: 0,
     weeks_data: phase.weeks_data.map((week, wi) => ({
       ...week,
       done: false,
-      current: pi === 0 && wi === 0   // only Week 1 is current
+      current: pi === 0 && wi === 0
     }))
   }))
 
-  // Metadata
-  roadmap.generatedAt    = new Date().toISOString()
-  roadmap.semesterLabel  = `Semester ${semester}`
-  roadmap.goal           = { id: goalId, title: goalTitle }
-  roadmap.branch         = branch
-  roadmap.hoursPerWeek   = hoursPerWeek
-  roadmap.mode           = mode
+  roadmap.generatedAt   = new Date().toISOString()
+  roadmap.semesterLabel = `Semester ${semester}`
+  roadmap.goal          = { id: goalId, title: goalTitle }
+  roadmap.branch        = branch
+  roadmap.hoursPerWeek  = hoursPerWeek
+  roadmap.mode          = mode
+
+  // ── Save to backend ──
+  const token = localStorage.getItem('token')
+  const saveRes = await fetch('http://localhost:8080/api/onboarding/generate-roadmap', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({
+  userId,
+  branch,
+  semester,
+  college: null, // pass college here if you collect it during onboarding
+  roadmapJson: JSON.stringify(roadmap)
+})
+  })
+
+  if (!saveRes.ok) {
+    throw new Error('Failed to save roadmap to backend')
+  }
 
   return roadmap
 }

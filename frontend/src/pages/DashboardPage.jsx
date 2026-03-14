@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import ProfilePage from "./ProfilePage"; // ← separate file for easy editing
-
+import { useAuth } from '../context/AuthContext';  // adjust path as needed
 // ─── THEME ────────────────────────────────────────────────────────────────────
 const C = {
   bg: "#f5f0e8", bgAlt: "#ede8df", bgDeep: "#e6dfd3",
@@ -21,19 +21,23 @@ const diffConfig = {
 
 // ─── AI HELPER ────────────────────────────────────────────────────────────────
 async function callAI(systemPrompt, userMessage) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const token = localStorage.getItem('token')
+  const res = await fetch("http://localhost:8080/api/ai/generate", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
-      messages: [{ role: "user", content: `SYSTEM: ${systemPrompt}\n\nUSER: ${userMessage}` }],
-    }),
-  });
-  const data = await res.json();
-  const text = data.content?.map(b => b.text || "").join("") || "";
-  try { return JSON.parse(text.replace(/```json|```/g, "").trim()); }
-  catch { return { raw: text }; }
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    },
+    body: JSON.stringify({ systemPrompt, userMessage }),
+  })
+  const data = await res.json()
+  // Gemini response structure
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
+  try {
+    return JSON.parse(text.replace(/```json|```/g, "").trim())
+  } catch {
+    return { raw: text }
+  }
 }
 
 // ─── DATA ─────────────────────────────────────────────────────────────────────
@@ -577,82 +581,142 @@ function ReportModal({ tasks, readiness, onClose }) {
   );
 }
 
-// ─── DASHBOARD PAGE (from Doc4 — unchanged) ───────────────────────────────────
-function DashboardPage({ tasks, setTasks, milestones, setMilestones, hoursPerWeek, setHoursPerWeek, phases, setPhases, weeklyHours, setWeeklyHours, showToast }) {
-  const [aiInsight, setAiInsight] = useState("");
-  const [insightLoading, setInsightLoading] = useState(true);
-  const [insightOpen, setInsightOpen] = useState(true);
-  const [adaptationLogs, setAdaptationLogs] = useState([]);
-  const [checkinPending, setCheckinPending] = useState(false);
-  const [modal, setModal] = useState(null);
+function DashboardPage({ milestones, setMilestones, hoursPerWeek, setHoursPerWeek, phases, setPhases, weeklyHours, setWeeklyHours, showToast }) {
+  const { user, token } = useAuth()
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-  const completedTasks = tasks.filter(t => t.status === "COMPLETED").length;
-  const weekProgress = Math.round((completedTasks / tasks.length) * 100);
+  const [tasks, setTasks] = useState([])
+  const [tasksLoading, setTasksLoading] = useState(true)
+  const [aiInsight, setAiInsight] = useState("")
+  const [insightLoading, setInsightLoading] = useState(true)
+  const [insightOpen, setInsightOpen] = useState(true)
+  const [adaptationLogs, setAdaptationLogs] = useState([])
+  const [checkinPending, setCheckinPending] = useState(false)
+  const [modal, setModal] = useState(null)
+
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
+
+  // ── Load tasks from backend ──
+ useEffect(() => {
+  if (!token) return;
+
+  fetch('http://localhost:8080/api/roadmap/current', {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  .then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.text();
+  })
+  .then(text => {
+    if (!text || text.trim().length === 0)
+      throw new Error('Empty response');
+
+    // Handle double-serialized JSON
+    let roadmapData;
+    try {
+      roadmapData = JSON.parse(text);
+      if (typeof roadmapData === 'string') {
+        roadmapData = JSON.parse(roadmapData); // unwrap if double-encoded
+      }
+    } catch (e) {
+      throw new Error('Invalid JSON: ' + e.message);
+    }
+
+    setRoadmap(roadmapData);
+
+    if (roadmapData.hoursPerWeek)
+      setHoursPerWeek(roadmapData.hoursPerWeek);
+
+    // ✅ Use roadmapData, NOT roadmap (stale closure fix)
+   if (roadmapData.phases) {
+      setPhases(roadmapData.phases.map((p, i) => ({
+        id: p.id || i + 1,
+        goal: p.goal || `Phase ${i + 1}`,
+        completion: p.completion || 0,
+        weeks: p.weeks || `${i * 4 + 1}–${i * 4 + 4}`
+      })));
+    }
+  })
+  .catch(err => console.warn('Could not load roadmap from backend:', err));
+}, [token]);
+
+  const completedTasks = tasks.filter(t => t.status === "COMPLETED").length
+  const weekProgress = tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0
 
   const calcReadiness = useCallback(() => {
-    const skillScore = Math.round((completedTasks / tasks.length) * 100);
-    return Math.round(skillScore * 0.4 + 60 * 0.3 + Math.min(milestones.length * 20, 100) * 0.2 + 68 * 0.1);
-  }, [completedTasks, tasks.length, milestones.length]);
-  const readinessScore = calcReadiness();
+    if (tasks.length === 0) return 0
+    const skillScore = Math.round((completedTasks / tasks.length) * 100)
+    return Math.round(skillScore * 0.4 + 60 * 0.3 + Math.min(milestones.length * 20, 100) * 0.2 + 68 * 0.1)
+  }, [completedTasks, tasks.length, milestones.length])
+  const readinessScore = calcReadiness()
 
+  // ── AI Insight (only after tasks loaded) ──
   useEffect(() => {
-    const missedCount = tasks.filter(t => t.status === "PENDING").length;
-    if (missedCount >= 3) {
-      setCheckinPending(true);
-      setAdaptationLogs(prev => [...prev, { pattern: "Multiple tasks pending", action: "Check-in modal triggered", date: "Today" }]);
-    }
-    const lowConf = tasks.filter(t => t.status === "COMPLETED" && t.confidence <= 2);
-    if (lowConf.length > 0) {
-      setAdaptationLogs(prev => [...prev, { pattern: `Low confidence on: ${lowConf.map(t=>t.title).join(", ")}`, action: "Reinforcement content enabled", date: "Today" }]);
-    }
-  }, []);
-
-  useEffect(() => {
-    const lowConf = tasks.filter(t => t.status==="COMPLETED" && t.confidence<=2).map(t=>t.title);
+    if (tasksLoading || tasks.length === 0) return
+    const lowConf = tasks.filter(t => t.status === "COMPLETED" && t.confidence <= 2).map(t => t.title)
     callAI(
       "You are a supportive AI mentor. Generate one short, specific, actionable weekly insight. Return ONLY raw JSON with field: insight (string, 2 sentences max).",
-      `Sem 3, Week 6. ${completedTasks}/${tasks.length} tasks done. Low confidence: ${lowConf.join(", ")||"none"}.`
-    ).then(r => { setAiInsight(r.insight || r.raw || "Keep pushing — consistency beats intensity every time."); setInsightLoading(false); });
-  }, []);
+      `Sem ${user?.semester || 3}, Week 6. ${completedTasks}/${tasks.length} tasks done. Low confidence: ${lowConf.join(", ") || "none"}.`
+    ).then(r => {
+      setAiInsight(r.insight || r.raw || "Keep pushing — consistency beats intensity every time.")
+      setInsightLoading(false)
+    })
+  }, [tasksLoading])
 
   const handleTaskComplete = (id, conf) => {
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, status: "COMPLETED", confidence: conf } : t));
-    setWeeklyHours(prev => { const n=[...prev]; n[5]=Math.min(n[5]+2,20); return n; });
-    showToast("Task marked complete!");
-    if (conf <= 2) showToast("Reinforcement content is loading for this task…");
+    // Optimistic UI update
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, status: "COMPLETED", confidence: conf } : t))
+    setWeeklyHours(prev => { const n = [...prev]; n[5] = Math.min(n[5] + 2, 20); return n; })
+    showToast("Task marked complete!")
+    if (conf <= 2) showToast("Reinforcement content is loading for this task…")
+
+    // Persist to backend
+    fetch(`http://localhost:8080/api/learning-path/complete/${id}`, {
+  method: "PUT",
+      headers: { "Authorization": `Bearer ${token}` }
+    }).catch(err => console.error("Failed to save completion", err))
+
+    // Update phase completion
     setPhases(prev => prev.map(p => {
       if (p.id === 2) {
-        const done = tasks.filter(t => t.status==="COMPLETED").length + 1;
-        return { ...p, completion: Math.round((done / tasks.length) * 100) };
+        const done = tasks.filter(t => t.id === id || t.status === "COMPLETED").length
+        return { ...p, completion: Math.round((done / tasks.length) * 100) }
       }
-      return p;
-    }));
-  };
+      return p
+    }))
+  }
 
-  const handleUpdateTask = (id, updates) => setTasks(prev => prev.map(t => t.id===id ? {...t,...updates} : t));
+  const handleUpdateTask = (id, updates) =>
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t))
 
   const handleCheckinSubmit = async ({ reason, hours }) => {
-    setHoursPerWeek(hours);
+    setHoursPerWeek(hours)
     const result = await callAI(
       "Return ONLY raw JSON with field: message (string, 1 sentence confirming the plan was adjusted).",
       `Missed week. Reason: ${reason}. New hours: ${hours}h/week.`
-    );
-    setCheckinPending(false);
-    setModal(null);
-    setAdaptationLogs(prev => [...prev, { pattern: `Missed week — reason: ${reason}`, action: result.message || "Plan recalibrated", date: "Today" }]);
-    showToast("Your plan has been updated!");
-  };
+    )
+    setCheckinPending(false)
+    setModal(null)
+    setAdaptationLogs(prev => [...prev, {
+      pattern: `Missed week — reason: ${reason}`,
+      action: result.message || "Plan recalibrated",
+      date: "Today"
+    }])
+    showToast("Your plan has been updated!")
+  }
+
+  const firstName = user?.name?.split(" ")[0] || "Student"
+  const branch = user?.branch || "CSE"
+  const semester = user?.semester || 3
 
   return (
     <div>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 28, animation: "fadeUp 0.5s ease" }}>
         <div>
-          <div style={{ fontSize: 11, color: C.textLight, marginBottom: 4, letterSpacing: "0.07em", textTransform: "uppercase" }}>{STUDENT.branch} · Semester {STUDENT.semester} · Week 6 of 16</div>
+          <div style={{ fontSize: 11, color: C.textLight, marginBottom: 4, letterSpacing: "0.07em", textTransform: "uppercase" }}>{branch} · Semester {semester} · Week 6 of 16</div>
           <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: "clamp(1.6rem,2.5vw,2.2rem)", fontWeight: 900, color: C.text, letterSpacing: "-0.02em", lineHeight: 1.2 }}>
-            {greeting}, <span className="gold-shimmer">{STUDENT.name.split(" ")[0]}</span> 👋
+            {greeting}, <span className="gold-shimmer">{firstName}</span> 👋
           </h1>
           <p style={{ fontSize: 13, color: C.textMid, marginTop: 5 }}>This week: <span style={{ color: C.gold, fontWeight: 600 }}>Binary Trees & Graph Traversal</span></p>
         </div>
@@ -673,7 +737,11 @@ function DashboardPage({ tasks, setTasks, milestones, setMilestones, hoursPerWee
           <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg,${C.gold},${C.goldLight})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>✨</div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 11, color: C.gold, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>AI Weekly Insight</div>
-            <p style={{ fontSize: 13, color: C.textMid, lineHeight: 1.65 }}>{insightLoading ? <span style={{ animation: "pulse 1.5s ease infinite", display: "inline-block" }}>Generating your personalised insight…</span> : aiInsight}</p>
+            <p style={{ fontSize: 13, color: C.textMid, lineHeight: 1.65 }}>
+              {insightLoading
+                ? <span style={{ animation: "pulse 1.5s ease infinite", display: "inline-block" }}>Generating your personalised insight…</span>
+                : aiInsight}
+            </p>
           </div>
           <button onClick={() => setInsightOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: C.textLight }}>×</button>
         </div>
@@ -682,10 +750,10 @@ function DashboardPage({ tasks, setTasks, milestones, setMilestones, hoursPerWee
       {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 24 }}>
         {[
-          { label: "Semester Progress", value: "38%", sub: "6 of 16 weeks",       color: C.gold,   icon: "◎" },
-          { label: "Week Tasks",        value: `${completedTasks}/${tasks.length}`, sub: "tasks done", color: C.green, icon: "✓" },
-          { label: "Readiness Score",   value: readinessScore, sub: "placement readiness", color: C.blue, icon: "◈" },
-          { label: "Streak",            value: `${STUDENT.streak}d`, sub: "consecutive days", color: C.red, icon: "🔥" },
+          { label: "Semester Progress", value: "38%",                          sub: "6 of 16 weeks",        color: C.gold,   icon: "◎" },
+          { label: "Week Tasks",        value: `${completedTasks}/${tasks.length}`, sub: "tasks done",      color: C.green,  icon: "✓" },
+          { label: "Readiness Score",   value: readinessScore,                 sub: "placement readiness",  color: C.blue,   icon: "◈" },
+          { label: "Streak",            value: `${STUDENT.streak}d`,           sub: "consecutive days",     color: C.red,    icon: "🔥" },
         ].map((s, i) => (
           <div key={i} className="card-hover" style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, padding: "18px 20px", transition: "all 0.25s", animation: `fadeUp ${0.3+i*0.08}s ease`, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
@@ -698,131 +766,140 @@ function DashboardPage({ tasks, setTasks, milestones, setMilestones, hoursPerWee
         ))}
       </div>
 
+      {/* Loading state */}
+      {tasksLoading && (
+        <div style={{ textAlign: "center", padding: "40px 0", color: C.textLight, fontSize: 13 }}>
+          Loading your tasks…
+        </div>
+      )}
+
       {/* Main Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          {/* Tasks */}
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <div>
-                <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, fontWeight: 800, color: C.text }}>Week 6 Focus</h2>
-                <div style={{ fontSize: 11, color: C.textLight, marginTop: 2 }}>{completedTasks} completed · {tasks.length - completedTasks} remaining</div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 110, height: 5, background: C.bgDeep, borderRadius: 5, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${weekProgress}%`, background: `linear-gradient(90deg,${C.gold},${C.goldLight})`, borderRadius: 5, transition: "width 0.7s ease" }} />
-                </div>
-                <span style={{ fontSize: 11, color: C.gold, fontWeight: 700, fontFamily: "'DM Mono', monospace" }}>{weekProgress}%</span>
-              </div>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {tasks.map(task => <TaskCard key={task.id} task={task} onComplete={handleTaskComplete} onUpdateTask={handleUpdateTask} />)}
-            </div>
-          </div>
-
-          {/* Phases */}
-          <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 20, padding: "22px 24px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)" }}>
-            <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 18 }}>Semester Phases</h3>
-            {phases.map(phase => (
-              <div key={phase.id} style={{ marginBottom: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: phase.id===2 ? phase.color : phase.completion===100 ? C.green : C.border, boxShadow: phase.id===2 ? `0 0 8px ${phase.color}` : "none" }} />
-                    <span style={{ fontSize: 13, color: phase.id===2 ? C.text : phase.completion===100 ? C.textLight : C.bgDeep, fontWeight: phase.id===2 ? 700 : 500 }}>Phase {phase.id}: {phase.goal}</span>
-                    <span style={{ fontSize: 11, color: C.textLight }}>Wk {phase.weeks}</span>
-                  </div>
-                  <span style={{ fontSize: 12, fontFamily: "'DM Mono', monospace", color: phase.completion===100 ? C.green : phase.id===2 ? phase.color : C.textLight, fontWeight: 700 }}>{phase.completion}%</span>
-                </div>
-                <div style={{ height: 4, background: C.bgAlt, borderRadius: 4, overflow: "hidden" }}>
-                  <div style={{ height: "100%", borderRadius: 4, transition: "width 1s ease", width: `${phase.completion}%`, background: phase.completion===100 ? C.green : phase.id===2 ? `linear-gradient(90deg,${phase.color},${C.goldLight})` : C.bgDeep }} />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Bottom row */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            <MilestonePanel milestones={milestones} onAdd={(m) => { setMilestones(prev => [...prev, { ...m, id: `m${Date.now()}`, sem: 3 }]); showToast("Milestone logged! Readiness score updated."); }} />
-            <WeeklyChart data={weeklyHours} currentWeek={6} />
-          </div>
-        </div>
-
-        {/* Right column */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* Readiness Score */}
-          <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 20, padding: "22px 24px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)" }}>
-            <div style={{ fontSize: 11, color: C.textLight, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>Readiness Engine</div>
-            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 16 }}>Placement Score</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
-              <CircularProgress value={readinessScore} color={C.gold} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12, color: C.textMid, lineHeight: 1.65 }}>Score updates live as you complete tasks and log milestones.</div>
-                {milestones.length < 3 && <div style={{ marginTop: 8, fontSize: 11, color: C.gold, background: C.goldBg, padding: "4px 10px", borderRadius: 20, display: "inline-block", fontWeight: 600 }}>↑ Log a milestone to boost by ~8pts</div>}
-              </div>
-            </div>
-            {[
-              { label: "Skill Completion", value: Math.round((completedTasks/tasks.length)*100), weight: "40%", color: C.gold   },
-              { label: "Goal Alignment",   value: 60, weight: "30%", color: C.blue   },
-              { label: "Milestones",       value: Math.min(milestones.length*20,100), weight: "20%", color: C.purple },
-              { label: "Syllabus",         value: 68, weight: "10%", color: C.green  },
-            ].map(item => (
-              <div key={item.label} style={{ marginBottom: 8 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, color: C.textMid }}>{item.label} <span style={{ color: C.textLight }}>({item.weight})</span></span>
-                  <span style={{ fontSize: 11, fontFamily: "'DM Mono', monospace", color: item.color, fontWeight: 700 }}>{item.value}</span>
-                </div>
-                <div style={{ height: 4, background: C.bgAlt, borderRadius: 4, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${item.value}%`, background: item.color, borderRadius: 4, opacity: 0.75, transition: "width 1s ease" }} />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Journey */}
-          <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 20, padding: "22px 24px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)" }}>
-            <div style={{ fontSize: 11, color: C.textLight, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>4-Year Journey</div>
-            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 14 }}>Your Timeline</div>
-            {INIT_JOURNEY.map(sem => (
-              <div key={sem.sem} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 12, background: sem.status==="active" ? C.goldBg : "transparent", border: `1px solid ${sem.status==="active" ? C.goldBorder : "transparent"}`, marginBottom: 4 }}>
-                <div style={{ width: 24, height: 24, borderRadius: 7, flexShrink: 0, background: sem.status==="completed" ? C.greenBg : sem.status==="active" ? C.goldBg : C.bgAlt, border: `1.5px solid ${sem.status==="completed" ? C.greenBorder : sem.status==="active" ? C.goldBorder : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>
-                  {sem.status==="completed" ? <span style={{ color: C.green, fontWeight: 700 }}>✓</span> : sem.status==="active" ? <span style={{ color: C.gold, fontWeight: 900, fontFamily: "'Playfair Display', serif", fontSize: 12 }}>{sem.sem}</span> : <span style={{ color: C.textLight, fontSize: 10 }}>🔒</span>}
-                </div>
+      {!tasksLoading && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            {/* Tasks */}
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: sem.status==="active" ? 700 : 500, color: sem.status==="active" ? C.gold : sem.status==="completed" ? C.green : C.textLight }}>Sem {sem.sem}</div>
-                  <div style={{ fontSize: 10, color: sem.status==="active" ? C.goldLight : C.textLight }}>{sem.label}</div>
+                  <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, fontWeight: 800, color: C.text }}>Week 6 Focus</h2>
+                  <div style={{ fontSize: 11, color: C.textLight, marginTop: 2 }}>{completedTasks} completed · {tasks.length - completedTasks} remaining</div>
                 </div>
-                {sem.status==="active" && <div style={{ marginLeft: "auto", fontSize: 9, color: C.gold, background: C.white, padding: "2px 7px", borderRadius: 20, border: `1px solid ${C.goldBorder}`, fontWeight: 700 }}>NOW</div>}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 110, height: 5, background: C.bgDeep, borderRadius: 5, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${weekProgress}%`, background: `linear-gradient(90deg,${C.gold},${C.goldLight})`, borderRadius: 5, transition: "width 0.7s ease" }} />
+                  </div>
+                  <span style={{ fontSize: 11, color: C.gold, fontWeight: 700, fontFamily: "'DM Mono', monospace" }}>{weekProgress}%</span>
+                </div>
               </div>
-            ))}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {tasks.map(task => <TaskCard key={task.id} task={task} onComplete={handleTaskComplete} onUpdateTask={handleUpdateTask} />)}
+              </div>
+            </div>
+
+            {/* Phases */}
+            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 20, padding: "22px 24px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)" }}>
+              <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 18 }}>Semester Phases</h3>
+              {phases.map(phase => (
+                <div key={phase.id} style={{ marginBottom: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: phase.id===2 ? phase.color : phase.completion===100 ? C.green : C.border, boxShadow: phase.id===2 ? `0 0 8px ${phase.color}` : "none" }} />
+                      <span style={{ fontSize: 13, color: phase.id===2 ? C.text : phase.completion===100 ? C.textLight : C.bgDeep, fontWeight: phase.id===2 ? 700 : 500 }}>Phase {phase.id}: {phase.goal}</span>
+                      <span style={{ fontSize: 11, color: C.textLight }}>Wk {phase.weeks}</span>
+                    </div>
+                    <span style={{ fontSize: 12, fontFamily: "'DM Mono', monospace", color: phase.completion===100 ? C.green : phase.id===2 ? phase.color : C.textLight, fontWeight: 700 }}>{phase.completion}%</span>
+                  </div>
+                  <div style={{ height: 4, background: C.bgAlt, borderRadius: 4, overflow: "hidden" }}>
+                    <div style={{ height: "100%", borderRadius: 4, transition: "width 1s ease", width: `${phase.completion}%`, background: phase.completion===100 ? C.green : phase.id===2 ? `linear-gradient(90deg,${phase.color},${C.goldLight})` : C.bgDeep }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Bottom row */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <MilestonePanel milestones={milestones} onAdd={(m) => { setMilestones(prev => [...prev, { ...m, id: `m${Date.now()}`, sem: semester }]); showToast("Milestone logged! Readiness score updated."); }} />
+              <WeeklyChart data={weeklyHours} currentWeek={6} />
+            </div>
           </div>
 
-          {/* Quick Actions */}
-          <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 20, padding: "20px 22px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)" }}>
-            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 15, fontWeight: 800, color: C.text, marginBottom: 12 }}>Quick Actions</div>
-            {[
-              { label: "View Full Roadmap",      icon: "◎", action: () => setModal("roadmap")     },
-              { label: "Update Weekly Hours",     icon: "⏱", action: () => setModal("hours")       },
-              { label: "Check Adaptation Status", icon: "⚡", action: () => setModal("adaptation") },
-              { label: "Generate Week Report",    icon: "📊", action: () => setModal("report")     },
-            ].map(a => (
-              <button key={a.label} onClick={a.action}
-                style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", borderRadius: 10, background: "transparent", border: `1px solid ${C.border}`, color: C.textMid, fontSize: 12, cursor: "pointer", textAlign: "left", transition: "all 0.18s", fontWeight: 500, width: "100%", marginBottom: 5 }}
-                onMouseEnter={e => { e.currentTarget.style.background = C.bgAlt; e.currentTarget.style.borderColor = C.goldBorder; e.currentTarget.style.color = C.gold; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textMid; }}>
-                <span style={{ fontSize: 15 }}>{a.icon}</span>{a.label}<span style={{ marginLeft: "auto", opacity: 0.4 }}>→</span>
-              </button>
-            ))}
+          {/* Right column */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Readiness Score */}
+            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 20, padding: "22px 24px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)" }}>
+              <div style={{ fontSize: 11, color: C.textLight, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>Readiness Engine</div>
+              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 16 }}>Placement Score</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
+                <CircularProgress value={readinessScore} color={C.gold} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12, color: C.textMid, lineHeight: 1.65 }}>Score updates live as you complete tasks and log milestones.</div>
+                  {milestones.length < 3 && <div style={{ marginTop: 8, fontSize: 11, color: C.gold, background: C.goldBg, padding: "4px 10px", borderRadius: 20, display: "inline-block", fontWeight: 600 }}>↑ Log a milestone to boost by ~8pts</div>}
+                </div>
+              </div>
+              {[
+                { label: "Skill Completion", value: Math.round((completedTasks / tasks.length) * 100) || 0, weight: "40%", color: C.gold   },
+                { label: "Goal Alignment",   value: 60,                                                      weight: "30%", color: C.blue   },
+                { label: "Milestones",       value: Math.min(milestones.length * 20, 100),                   weight: "20%", color: C.purple },
+                { label: "Syllabus",         value: 68,                                                      weight: "10%", color: C.green  },
+              ].map(item => (
+                <div key={item.label} style={{ marginBottom: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ fontSize: 11, color: C.textMid }}>{item.label} <span style={{ color: C.textLight }}>({item.weight})</span></span>
+                    <span style={{ fontSize: 11, fontFamily: "'DM Mono', monospace", color: item.color, fontWeight: 700 }}>{item.value}</span>
+                  </div>
+                  <div style={{ height: 4, background: C.bgAlt, borderRadius: 4, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${item.value}%`, background: item.color, borderRadius: 4, opacity: 0.75, transition: "width 1s ease" }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Journey */}
+            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 20, padding: "22px 24px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)" }}>
+              <div style={{ fontSize: 11, color: C.textLight, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>4-Year Journey</div>
+              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 14 }}>Your Timeline</div>
+              {INIT_JOURNEY.map(sem => (
+                <div key={sem.sem} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 12, background: sem.status==="active" ? C.goldBg : "transparent", border: `1px solid ${sem.status==="active" ? C.goldBorder : "transparent"}`, marginBottom: 4 }}>
+                  <div style={{ width: 24, height: 24, borderRadius: 7, flexShrink: 0, background: sem.status==="completed" ? C.greenBg : sem.status==="active" ? C.goldBg : C.bgAlt, border: `1.5px solid ${sem.status==="completed" ? C.greenBorder : sem.status==="active" ? C.goldBorder : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>
+                    {sem.status==="completed" ? <span style={{ color: C.green, fontWeight: 700 }}>✓</span> : sem.status==="active" ? <span style={{ color: C.gold, fontWeight: 900, fontFamily: "'Playfair Display', serif", fontSize: 12 }}>{sem.sem}</span> : <span style={{ color: C.textLight, fontSize: 10 }}>🔒</span>}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: sem.status==="active" ? 700 : 500, color: sem.status==="active" ? C.gold : sem.status==="completed" ? C.green : C.textLight }}>Sem {sem.sem}</div>
+                    <div style={{ fontSize: 10, color: sem.status==="active" ? C.goldLight : C.textLight }}>{sem.label}</div>
+                  </div>
+                  {sem.status==="active" && <div style={{ marginLeft: "auto", fontSize: 9, color: C.gold, background: C.white, padding: "2px 7px", borderRadius: 20, border: `1px solid ${C.goldBorder}`, fontWeight: 700 }}>NOW</div>}
+                </div>
+              ))}
+            </div>
+
+            {/* Quick Actions */}
+            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 20, padding: "20px 22px", boxShadow: "0 2px 12px rgba(0,0,0,0.04)" }}>
+              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 15, fontWeight: 800, color: C.text, marginBottom: 12 }}>Quick Actions</div>
+              {[
+                { label: "View Full Roadmap",       icon: "◎", action: () => setModal("roadmap")     },
+                { label: "Update Weekly Hours",      icon: "⏱", action: () => setModal("hours")       },
+                { label: "Check Adaptation Status",  icon: "⚡", action: () => setModal("adaptation") },
+                { label: "Generate Week Report",     icon: "📊", action: () => setModal("report")     },
+              ].map(a => (
+                <button key={a.label} onClick={a.action}
+                  style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", borderRadius: 10, background: "transparent", border: `1px solid ${C.border}`, color: C.textMid, fontSize: 12, cursor: "pointer", textAlign: "left", transition: "all 0.18s", fontWeight: 500, width: "100%", marginBottom: 5 }}
+                  onMouseEnter={e => { e.currentTarget.style.background = C.bgAlt; e.currentTarget.style.borderColor = C.goldBorder; e.currentTarget.style.color = C.gold; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textMid; }}>
+                  <span style={{ fontSize: 15 }}>{a.icon}</span>{a.label}<span style={{ marginLeft: "auto", opacity: 0.4 }}>→</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {modal==="checkin"    && <CheckinModal onSubmit={handleCheckinSubmit} onClose={() => { setModal(null); setCheckinPending(false); }} />}
       {modal==="adaptation" && <AdaptationModal logs={adaptationLogs} onClose={() => setModal(null)} />}
-      {modal==="hours"      && <HoursModal current={hoursPerWeek} onSave={(v) => { setHoursPerWeek(v); showToast(`Weekly hours updated to ${v}h`); }} onClose={() => setModal(null)} />}
+      {modal==="hours"      && <HoursModal current={hoursPerWeek} onSave={(v) => { setHoursPerWeek(v); showToast(`Weekly hours updated to ${v}h`) }} onClose={() => setModal(null)} />}
       {modal==="roadmap"    && <RoadmapModal phases={phases} tasks={tasks} onClose={() => setModal(null)} />}
       {modal==="report"     && <ReportModal tasks={tasks} readiness={readinessScore} onClose={() => setModal(null)} />}
     </div>
-  );
+  )
 }
 
 // ─── PROFILE PAGE → imported from ./ProfilePage.jsx ──────────────────────────
@@ -842,11 +919,13 @@ function AnalyticsPage({ tasks, milestones }) {
   const heatmapData = Array.from({ length: 12 }, (_, w) => Array.from({ length: 7 }, (_, d) => { const base = (w<6 && d<5) ? Math.random() : 0; return base > 0.3 ? Math.floor(base*4)+1 : 0; }));
 
   useEffect(() => {
-    const lowConf = tasks.filter(t => t.status==="COMPLETED" && t.confidence<=2).map(t=>t.title);
-    callAI("Generate a performance analysis report. Return ONLY JSON with fields: summary (string, 2 sentences), top_strength (string), biggest_gap (string), next_action (string), predicted_readiness_end_of_semester (number 0-100).",
-      `Week 6 Sem 3. ${completedTasks.length}/${tasks.length} tasks. Avg confidence: ${avgConf}. Total hours: ${totalHours}h. Low confidence: ${lowConf.join(", ")||"none"}.`)
-      .then(r => { setAiReport(r); setReportLoading(false); });
-  }, []);
+  if (tasks.length === 0) return
+  const lowConf = tasks.filter(t => t.status==="COMPLETED" && t.confidence<=2).map(t=>t.title)
+  callAI(
+    "Generate a performance analysis report. Return ONLY JSON with fields: summary (string, 2 sentences), top_strength (string), biggest_gap (string), next_action (string), predicted_readiness_end_of_semester (number 0-100).",
+    `Week 6 Sem 3. ${completedTasks.length}/${tasks.length} tasks. Avg confidence: ${avgConf}. Total hours: ${totalHours}h. Low confidence: ${lowConf.join(", ")||"none"}.`
+  ).then(r => { setAiReport(r); setReportLoading(false) })
+}, [tasks.length])
 
   return (
     <div style={{ animation: "fadeUp 0.4s ease" }}>
@@ -1081,7 +1160,7 @@ function JourneyPage({ milestones }) {
     }
   };
 
-  const selected = JOURNEY_DATA.find(s => s.sem === selectedSem);
+ const selected = JOURNEY_DATA.find(s => s.sem === selectedSem) || JOURNEY_DATA[2];
 
   return (
     <div style={{ animation: "fadeUp 0.4s ease" }}>
@@ -1233,16 +1312,40 @@ function JourneyPage({ milestones }) {
   );
 }
 
-// ─── ROADMAP PAGE (from Doc3 — restored) ─────────────────────────────────────
-function RoadmapPage({ tasks }) {
+function RoadmapPage({ roadmap }) {
   const [selectedPhase, setSelectedPhase] = useState(2);
   const [selectedWeek, setSelectedWeek] = useState(6);
   const [expandedTask, setExpandedTask] = useState(null);
   const [aiExpandData, setAiExpandData] = useState({});
   const [loadingExpand, setLoadingExpand] = useState(null);
   const [viewMode, setViewMode] = useState("semester");
-  const phase = FULL_ROADMAP.find(p => p.id === selectedPhase);
-  const currentWeekData = FULL_ROADMAP.flatMap(p => p.weeks_data).find(w => w.wk === selectedWeek);
+
+  const displayRoadmap = roadmap?.phases
+    ? roadmap.phases.map((p, i) => ({
+        id: p.id || i + 1,
+        phase: `Phase ${p.id || i + 1}`,
+        goal: p.goal || `Phase ${i + 1}`,
+        weeks: p.weeks || `${i * 4 + 1}–${i * 4 + 4}`,
+        color: [C.green, C.gold, C.purple, C.blue][i] || C.gold,
+        completion: p.completion || 0,
+        weeks_data: (p.weeks_data || []).map(w => ({
+          wk: w.wk,
+          focus: w.focus,
+          done: w.done || false,
+          current: w.current || false,
+          tasks: (w.tasks || []).map(t => t.title || t)
+        }))
+      }))
+    : FULL_ROADMAP
+
+  if (!roadmap) return (
+    <div style={{ textAlign: "center", padding: "60px 0", color: C.textLight, fontSize: 13 }}>
+      Loading your roadmap…
+    </div>
+  )
+
+  const phase = displayRoadmap.find(p => p.id === selectedPhase);
+  const currentWeekData = displayRoadmap.flatMap(p => p.weeks_data).find(w => w.wk === selectedWeek);
 
   const handleExpandTask = async (taskKey) => {
     if (expandedTask === taskKey) { setExpandedTask(null); return; }
@@ -1276,7 +1379,7 @@ function RoadmapPage({ tasks }) {
       {viewMode==="semester" && (
         <div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 22 }}>
-            {FULL_ROADMAP.map(p => (
+            {displayRoadmap.map(p => (
               <div key={p.id} onClick={() => { setSelectedPhase(p.id); setViewMode("phase"); }}
                 style={{ background: C.white, border: `2px solid ${selectedPhase===p.id ? p.color : C.border}`, borderRadius: 18, padding: "18px 20px", cursor: "pointer", transition: "all 0.25s" }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = p.color; e.currentTarget.style.boxShadow = `0 4px 20px ${p.color}20`; }}
@@ -1297,7 +1400,7 @@ function RoadmapPage({ tasks }) {
           <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 20, padding: "24px 26px" }}>
             <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 16, fontWeight: 800, color: C.text, marginBottom: 18 }}>All 16 Weeks Overview</h3>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
-              {FULL_ROADMAP.flatMap(p => p.weeks_data.map(w => ({ ...w, phaseColor: p.color }))).map(wk => (
+              {displayRoadmap.flatMap(p => p.weeks_data.map(w => ({ ...w, phaseColor: p.color }))).map(wk => (
                 <div key={wk.wk} onClick={() => { setSelectedWeek(wk.wk); setViewMode("week"); }}
                   style={{ padding: "12px 14px", borderRadius: 12, background: wk.current ? C.goldBg : wk.done ? C.greenBg : C.bgAlt, border: `1.5px solid ${wk.current ? C.goldBorder : wk.done ? C.greenBorder : C.border}`, cursor: "pointer", position: "relative", overflow: "hidden", transition: "all 0.2s" }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = wk.phaseColor; }}
@@ -1321,7 +1424,7 @@ function RoadmapPage({ tasks }) {
       {viewMode==="phase" && phase && (
         <div>
           <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
-            {FULL_ROADMAP.map(p => (
+            {displayRoadmap.map(p => (
               <button key={p.id} onClick={() => setSelectedPhase(p.id)}
                 style={{ padding: "7px 18px", borderRadius: 10, border: `1.5px solid ${selectedPhase===p.id ? p.color : C.border}`, background: selectedPhase===p.id ? `${p.color}12` : "transparent", color: selectedPhase===p.id ? p.color : C.textLight, fontSize: 12, fontWeight: selectedPhase===p.id ? 700 : 500, cursor: "pointer" }}>
                 {p.phase}
@@ -1392,7 +1495,7 @@ function RoadmapPage({ tasks }) {
           <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 16, padding: "12px 16px", marginBottom: 18, display: "flex", alignItems: "center", gap: 8, overflowX: "auto" }}>
             <span style={{ fontSize: 11, color: C.textLight, flexShrink: 0 }}>Jump to week:</span>
             {Array.from({ length: 16 }, (_, i) => i+1).map(w => {
-              const wkData = FULL_ROADMAP.flatMap(p => p.weeks_data).find(wd => wd.wk===w);
+              const wkData = displayRoadmap.flatMap(p => p.weeks_data).find(wd => wd.wk===w);
               return (
                 <button key={w} onClick={() => setSelectedWeek(w)}
                   style={{ width: 32, height: 32, borderRadius: 8, border: `1.5px solid ${selectedWeek===w ? C.gold : wkData?.done ? C.greenBorder : C.border}`, background: selectedWeek===w ? C.gold : wkData?.current ? C.goldBg : wkData?.done ? C.greenBg : "transparent", color: selectedWeek===w ? "white" : wkData?.done ? C.green : C.textMid, fontSize: 11, fontWeight: selectedWeek===w ? 700 : 500, cursor: "pointer", flexShrink: 0 }}>
@@ -1463,7 +1566,7 @@ function RoadmapPage({ tasks }) {
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 20, padding: "20px 22px" }}>
                 <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 15, fontWeight: 800, color: C.text, marginBottom: 14 }}>Week Context</h3>
-                {(() => { const pfw = FULL_ROADMAP.find(p => p.weeks_data.some(w => w.wk===selectedWeek)); return pfw && (
+                {(() => { const pfw = displayRoadmap.find(p => p.weeks_data.some(w => w.wk===selectedWeek)); return pfw && (
                   <div>
                     <div style={{ padding: "10px 12px", background: `${pfw.color}10`, border: `1px solid ${pfw.color}30`, borderRadius: 10, marginBottom: 10 }}>
                       <div style={{ fontSize: 10, color: pfw.color, fontWeight: 700, marginBottom: 2 }}>{pfw.phase}</div>
@@ -1476,7 +1579,7 @@ function RoadmapPage({ tasks }) {
               </div>
               <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 20, padding: "18px 20px" }}>
                 <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 14, fontWeight: 800, color: C.text, marginBottom: 12 }}>Phase Weeks</h3>
-                {(() => { const pfw = FULL_ROADMAP.find(p => p.weeks_data.some(w => w.wk===selectedWeek)); return pfw?.weeks_data.map(wk => (
+                {(() => { const pfw = displayRoadmap.find(p => p.weeks_data.some(w => w.wk===selectedWeek)); return pfw?.weeks_data.map(wk => (
                   <button key={wk.wk} onClick={() => setSelectedWeek(wk.wk)}
                     style={{ width: "100%", padding: "8px 12px", borderRadius: 10, border: `1px solid ${selectedWeek===wk.wk ? C.goldBorder : C.border}`, background: selectedWeek===wk.wk ? C.goldBg : wk.current ? "rgba(180,83,9,0.03)" : "transparent", color: selectedWeek===wk.wk ? C.gold : C.textMid, fontSize: 12, fontWeight: selectedWeek===wk.wk ? 700 : 500, cursor: "pointer", textAlign: "left", marginBottom: 4, display: "flex", justifyContent: "space-between" }}>
                     <span>Week {wk.wk}: {wk.focus}</span>
@@ -1494,16 +1597,58 @@ function RoadmapPage({ tasks }) {
 
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [activeNav, setActiveNav] = useState("dashboard");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [tasks, setTasks] = useState(INIT_TASKS);
-  const [milestones, setMilestones] = useState(INIT_MILESTONES);
-  const [hoursPerWeek, setHoursPerWeek] = useState(STUDENT.hoursPerWeek);
-  const [phases, setPhases] = useState(INIT_PHASES);
-  const [weeklyHours, setWeeklyHours] = useState([4, 8, 10, 7, 12, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-  const [toast, setToast] = useState(null);
+  const { user, token } = useAuth()
+  const [activeNav, setActiveNav]     = useState("dashboard")
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [milestones, setMilestones]   = useState(INIT_MILESTONES)
+  const [hoursPerWeek, setHoursPerWeek] = useState(12)
+ const [roadmap, setRoadmap] = useState(null)
+ const [phases, setPhases] = useState(INIT_PHASES)
+  const [weeklyHours, setWeeklyHours] = useState([4, 8, 10, 7, 12, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+  const [toast, setToast]             = useState(null)
 
-  const showToast = (msg) => setToast(msg);
+  const showToast = (msg) => setToast(msg)
+
+ // Load roadmap phases from backend
+useEffect(() => {
+  if (!token) return
+
+  fetch('http://localhost:8080/api/roadmap/current', {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  .then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`)
+    return r.json()
+  })
+  .then(roadmapData => {
+
+    setRoadmap(roadmapData)
+
+    if (!roadmapData) return
+
+    // Set hours
+    if (roadmapData.hoursPerWeek)
+      setHoursPerWeek(roadmapData.hoursPerWeek)
+
+    // Load phases
+  if (roadmapData.phases)  {
+      setPhases(
+        roadmapData.phases.map((p, i) => ({
+          id: p.id || i + 1,
+          goal: p.goal || `Phase ${i + 1}`,
+          completion: p.completion || 0,
+          weeks: p.weeks || `${i * 4 + 1}–${i * 4 + 4}`,
+          color: [C.green, C.gold, C.purple, C.blue][i] || C.gold
+        }))
+      )
+    }
+
+  })
+  .catch(err =>
+    console.warn('Could not load roadmap from backend:', err)
+  )
+
+}, [token])
 
   const navItems = [
     { id: "dashboard", icon: "⬡", label: "Dashboard" },
@@ -1511,7 +1656,12 @@ export default function App() {
     { id: "journey",   icon: "◈", label: "Journey"    },
     { id: "analytics", icon: "◐", label: "Analytics"  },
     { id: "profile",   icon: "◉", label: "Profile"    },
-  ];
+  ]
+
+  const firstName = user?.name?.split(" ")[0] || "Student"
+  const initials  = user?.name?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() || "??"
+  const goal      = user?.goal || "Software Engineer"
+  const streak    = STUDENT.streak // keep mock until backend tracks streak
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'DM Sans', system-ui, sans-serif", display: "flex", color: C.text }}>
@@ -1530,7 +1680,7 @@ export default function App() {
         button { font-family: 'DM Sans', system-ui, sans-serif; }
       `}</style>
 
-      {/* Background */}
+      {/* Background — unchanged */}
       <div style={{ position: "fixed", inset: 0, backgroundImage: "radial-gradient(rgba(180,83,9,0.06) 1px, transparent 1px)", backgroundSize: "32px 32px", pointerEvents: "none", maskImage: "radial-gradient(ellipse at center, black 10%, transparent 75%)", zIndex: 0 }} />
       <div style={{ position: "fixed", top: "15%", right: "10%", width: 320, height: 320, borderRadius: "50%", background: "radial-gradient(circle, rgba(251,191,36,0.1), transparent)", filter: "blur(60px)", pointerEvents: "none", zIndex: 0 }} />
       <div style={{ position: "fixed", bottom: "20%", left: "15%", width: 260, height: 260, borderRadius: "50%", background: "radial-gradient(circle, rgba(180,83,9,0.07), transparent)", filter: "blur(50px)", pointerEvents: "none", zIndex: 0 }} />
@@ -1568,14 +1718,19 @@ export default function App() {
         {sidebarOpen && (
           <div style={{ padding: "14px", borderTop: `1px solid ${C.border}`, margin: "0 10px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: C.goldBg, border: `1.5px solid ${C.goldBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Playfair Display',serif", fontSize: 15, fontWeight: 900, color: C.gold, flexShrink: 0 }}>AM</div>
+              {/* Real user initials instead of hardcoded AM */}
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: C.goldBg, border: `1.5px solid ${C.goldBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Playfair Display',serif", fontSize: 15, fontWeight: 900, color: C.gold, flexShrink: 0 }}>{initials}</div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{STUDENT.name}</div>
-                <div style={{ fontSize: 11, color: C.gold, fontWeight: 600 }}>{STUDENT.goal}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{user?.name || "Student"}</div>
+                <div style={{ fontSize: 11, color: C.gold, fontWeight: 600 }}>{goal}</div>
               </div>
             </div>
             <div style={{ display: "flex", gap: 6 }}>
-              {[{ v: `${STUDENT.streak}d`, l: "Streak", c: C.red },{ v: "Sem 3", l: "Current", c: C.blue },{ v: "W6", l: "Week", c: C.green }].map((s,i) => (
+              {[
+                { v: `${streak}d`, l: "Streak",  c: C.red  },
+                { v: `Sem ${user?.semester || 3}`, l: "Current", c: C.blue },
+                { v: "W6",         l: "Week",    c: C.green }
+              ].map((s, i) => (
                 <div key={i} style={{ flex: 1, padding: "6px 8px", background: C.bgAlt, borderRadius: 8, border: `1px solid ${C.border}`, textAlign: "center" }}>
                   <div style={{ fontSize: 14, fontWeight: 800, color: s.c, fontFamily: "'Playfair Display',serif" }}>{s.v}</div>
                   <div style={{ fontSize: 9, color: C.textLight, textTransform: "uppercase" }}>{s.l}</div>
@@ -1588,14 +1743,14 @@ export default function App() {
 
       {/* Main */}
       <main style={{ flex: 1, overflow: "auto", padding: "28px 30px 50px", position: "relative", zIndex: 1 }}>
-        {activeNav==="dashboard" && <DashboardPage tasks={tasks} setTasks={setTasks} milestones={milestones} setMilestones={setMilestones} hoursPerWeek={hoursPerWeek} setHoursPerWeek={setHoursPerWeek} phases={phases} setPhases={setPhases} weeklyHours={weeklyHours} setWeeklyHours={setWeeklyHours} showToast={showToast} />}
-        {activeNav==="roadmap"   && <RoadmapPage tasks={tasks} />}
+        {activeNav==="dashboard" && <DashboardPage milestones={milestones} setMilestones={setMilestones} hoursPerWeek={hoursPerWeek} setHoursPerWeek={setHoursPerWeek} phases={phases} setPhases={setPhases} weeklyHours={weeklyHours} setWeeklyHours={setWeeklyHours} showToast={showToast} />}
+       {activeNav==="roadmap" && <RoadmapPage roadmap={roadmap} />}
         {activeNav==="journey"   && <JourneyPage milestones={milestones} />}
-        {activeNav==="analytics" && <AnalyticsPage tasks={tasks} milestones={milestones} />}
+        {activeNav==="analytics" && <AnalyticsPage tasks={[]} milestones={milestones} />}
         {activeNav==="profile"   && <ProfilePage student={STUDENT} milestones={milestones} setMilestones={setMilestones} hoursPerWeek={hoursPerWeek} setHoursPerWeek={setHoursPerWeek} showToast={showToast} />}
       </main>
 
       {toast && <Toast msg={toast} onDone={() => setToast(null)} />}
     </div>
-  );
+  )
 }

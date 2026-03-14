@@ -2,168 +2,122 @@ package com.claripath.backend.onboarding.service;
 
 import com.claripath.backend.entity.LearningPath;
 import com.claripath.backend.entity.RoadmapSnapshot;
+import com.claripath.backend.entity.User;
 import com.claripath.backend.repository.LearningPathRepository;
 import com.claripath.backend.repository.RoadmapSnapshotRepository;
+import com.claripath.backend.repository.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.transaction.annotation.Transactional;
-
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class OnboardingService {
 
     private final LearningPathRepository learningPathRepository;
     private final RoadmapSnapshotRepository roadmapSnapshotRepository;
-
-    @Value("${gemini.api.key}")
-    private String geminiApiKey;
+    private final UserRepository userRepository;
 
     public OnboardingService(
             LearningPathRepository learningPathRepository,
-            RoadmapSnapshotRepository roadmapSnapshotRepository) {
-
+            RoadmapSnapshotRepository roadmapSnapshotRepository,
+            UserRepository userRepository) {
         this.learningPathRepository = learningPathRepository;
         this.roadmapSnapshotRepository = roadmapSnapshotRepository;
+        this.userRepository = userRepository;
     }
 
     @Transactional
-    public String generateRoadmapFromAI(String prompt, Long userId) {
-
+    public String saveRoadmap(String roadmapJson, Long userId, String branch, Integer semester, String college) {
         try {
-
-            // 1️⃣ Delete previous roadmap
             roadmapSnapshotRepository.deleteByUserId(userId);
 
-            // 2️⃣ Call Gemini
-            String aiResponse = callGemini(prompt);
-
-            if (aiResponse == null) {
-                throw new RuntimeException("Gemini returned null response");
-            }
-
             ObjectMapper mapper = new ObjectMapper();
-            JsonNode root = mapper.readTree(aiResponse);
-
-            JsonNode candidates = root.path("candidates");
-
-            if (candidates.isEmpty()) {
-                throw new RuntimeException("Gemini returned no candidates");
-            }
-
-            // 3️⃣ Extract roadmap JSON
-            String roadmapJson = candidates.get(0)
-                    .path("content")
-                    .path("parts").get(0)
-                    .path("text")
-                    .asText();
-
-            roadmapJson = roadmapJson
-                    .replace("```json", "")
-                    .replace("```", "")
-                    .trim();
-
-            // 4️⃣ Validate JSON
             JsonNode roadmapNode = mapper.readTree(roadmapJson);
 
-            // 5️⃣ Save roadmap snapshot
             RoadmapSnapshot snapshot = new RoadmapSnapshot();
             snapshot.setUserId(userId);
-            snapshot.setSemester(1);
+            snapshot.setSemester(semester != null ? semester : 1);
             snapshot.setRoadmapJson(roadmapJson);
             snapshot.setGeneratedAt(LocalDateTime.now());
-
             roadmapSnapshotRepository.save(snapshot);
 
-            // 6️⃣ Extract tasks into learning_paths
+            // ── Update user profile from roadmap + onboarding data ──
+            Optional<User> userOpt = userRepository.findById(userId);
+            userOpt.ifPresent(user -> {
+                // From onboarding form
+                if (branch != null)   user.setBranch(branch);
+                if (semester != null) user.setSemester(semester);
+                if (college != null)  user.setCollege(college);
+
+                // From roadmap AI response
+                JsonNode summary = roadmapNode.path("studentSummary");
+                if (!summary.isMissingNode()) {
+                    String trueLevel = summary.path("trueLevel").asText(null);
+                    String startPoint = summary.path("startPoint").asText(null);
+                    if (trueLevel != null && !trueLevel.isEmpty())   user.setTrueLevel(trueLevel);
+                    if (startPoint != null && !startPoint.isEmpty()) user.setStartPoint(startPoint);
+
+                    JsonNode skipped = summary.path("topicsSkipped");
+                    if (skipped.isArray()) {
+                        StringBuilder sb = new StringBuilder();
+                        for (JsonNode t : skipped) {
+                            if (sb.length() > 0) sb.append(",");
+                            sb.append(t.asText());
+                        }
+                        user.setSkippedTopics(sb.toString());
+                    }
+                }
+                userRepository.save(user);
+            });
+
             extractAndSaveModules(userId, roadmapNode);
 
             return roadmapJson;
 
         } catch (Exception e) {
-
-            System.out.println("Gemini failed: " + e.getMessage());
+            System.out.println("Save failed: " + e.getMessage());
             e.printStackTrace();
-
-            return "Fallback roadmap created";
-        }
-    }
-
-    private String callGemini(String prompt) {
-
-        try {
-
-            Thread.sleep(1500);
-
-            String url =
-                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key="
-                            + geminiApiKey;
-
-            RestTemplate restTemplate = new RestTemplate();
-
-            Map<String, Object> text = Map.of("text", prompt);
-            Map<String, Object> part = Map.of("parts", List.of(text));
-            Map<String, Object> body = Map.of("contents", List.of(part));
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            HttpEntity<Map<String, Object>> request =
-                    new HttpEntity<>(body, headers);
-
-            ResponseEntity<String> response =
-                    restTemplate.postForEntity(url, request, String.class);
-
-            return response.getBody();
-
-        } catch (Exception e) {
-
-            System.out.println("Gemini API Error:");
-            e.printStackTrace();
-
-            return null;
+            throw new RuntimeException("Failed to save roadmap: " + e.getMessage());
         }
     }
 
     private void extractAndSaveModules(Long userId, JsonNode roadmapNode) {
-
         try {
-
-            // Remove previous learning path
             learningPathRepository.deleteByUserId(userId);
 
             JsonNode phases = roadmapNode.path("phases");
-
             int order = 1;
 
             for (JsonNode phase : phases) {
-
-                JsonNode weeks = phase.path("weeks");
-
-                for (JsonNode week : weeks) {
-
+                JsonNode weeksData = phase.path("weeks_data");
+                for (JsonNode week : weeksData) {
                     JsonNode tasks = week.path("tasks");
-
                     for (JsonNode task : tasks) {
-
                         LearningPath module = new LearningPath();
-
                         module.setUserId(userId);
                         module.setModuleName(task.path("title").asText());
-                        module.setDescription(task.path("description").asText());
-                        module.setResourceUrl(task.path("resource_url").asText());
+                        module.setDescription(task.path("desc").asText());
+                        module.setResourceUrl(task.path("resourceUrl").asText());
+                        module.setResource(task.path("resource").asText());
                         module.setDifficulty(task.path("difficulty").asText());
-                        module.setEstimatedHours(task.path("estimated_hours").asInt());
-
+                        module.setEstimatedHours(task.path("hours").asInt());
                         module.setOrderNo(order++);
                         module.setCompleted(false);
+
+                        // tags is an array — join to comma string
+                        JsonNode tagsNode = task.path("tags");
+                        if (tagsNode.isArray()) {
+                            StringBuilder sb = new StringBuilder();
+                            for (JsonNode tag : tagsNode) {
+                                if (sb.length() > 0) sb.append(",");
+                                sb.append(tag.asText());
+                            }
+                            module.setTags(sb.toString());
+                        }
 
                         learningPathRepository.save(module);
                     }
@@ -171,7 +125,6 @@ public class OnboardingService {
             }
 
         } catch (Exception e) {
-
             System.out.println("Module extraction failed");
             e.printStackTrace();
         }

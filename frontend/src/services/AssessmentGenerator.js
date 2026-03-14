@@ -1,25 +1,44 @@
 // ─── Assessment Question Generator ───────────────────────────────────────────
-// Takes: goal + whatYouKnow + branch + semester
-// Returns: exactly 7 question objects
-//
-// TWO MODES:
-// BEGINNER  — student knows nothing → 3 basic goal questions + 4 motivational
-// TARGETED  — student described some knowledge → 7 gap-finding questions
 
-import { callGeminiJSON } from './gemini'
+async function callGeminiJSON(system, userPrompt) {
+  const API_KEY = import.meta.env.VITE_GEMINI_API_KEY
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`
 
-// ── Detect if student knows nothing ──────────────────────────────────────────
-function studentKnowsNothing(whatYouKnow) {
-  if (!whatYouKnow) return true
-  const text = whatYouKnow.toLowerCase().trim()
-  if (text.length < 30) return true
-  const nothingPhrases = [
-    'nothing', 'dont know', "don't know", 'no idea', 'not sure',
-    'beginner', 'zero', 'never learned', 'never studied', 'i have no',
-    'no knowledge', 'i know nothing', 'not much', 'very little',
-    'barely', 'fresh start', 'complete beginner', 'starting from scratch'
-  ]
-  return nothingPhrases.some(phrase => text.includes(phrase))
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: `${system}\n\n${userPrompt}` }] }]
+      })
+    })
+
+    // Retry on 429 (quota) or 503 (overloaded)
+    if (res.status === 429 || res.status === 503) {
+      if (attempt < 3) {
+        const wait = 5000 * (attempt + 1)
+        console.warn(`Gemini ${res.status} — retrying in ${wait / 1000}s... (attempt ${attempt + 1})`)
+        await new Promise(r => setTimeout(r, wait))
+        continue
+      }
+      throw new Error(`Gemini unavailable (${res.status}). Please wait a moment and try again.`)
+    }
+
+    const data = await res.json()
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+
+    if (!text) {
+      throw new Error('Gemini returned empty response. Please try again.')
+    }
+
+    const cleaned = text.replace(/^```[\w]*\n?/m, '').replace(/```$/m, '').trim()
+
+    try {
+      return JSON.parse(cleaned)
+    } catch {
+      throw new Error('Gemini response was not valid JSON. Please try again.')
+    }
+  }
 }
 
 const SYSTEM = `You are an expert technical assessor for Indian engineering students.
@@ -37,77 +56,47 @@ Rules:
 - Questions must be specific to the stated career goal
 - Hints are optional, include only if the question references something the student might not know the terminology for`
 
-function buildBeginnerPrompt({ goalId, goalTitle, branch, semester }) {
+function buildPrompt({ goalId, goalTitle, branch, semester, whatYouKnow }) {
   return `STUDENT PROFILE:
 Career Goal: ${goalTitle} (${goalId})
 Branch: ${branch} | Semester: ${semester}
-Prior Knowledge: NONE — student says they know nothing yet.
-
-Generate 7 BEGINNER MODE questions:
-
-Questions 1, 2, 3 → level: "basic" — Foundational awareness questions about the career goal
-  - What do they THINK a ${goalTitle} does day-to-day?
-  - Have they ever encountered or tried anything related to ${goalTitle}? What happened?
-  - What core concept of ${goalTitle} have they heard of, even vaguely?
-  Keep these approachable — the student knows nothing, don't intimidate.
-
-Questions 4, 5, 6, 7 → level: "motivational" — Understand their mindset and context
-  Question 4: WHY do they want this career? What specifically excites them about ${goalTitle}?
-  Question 5: HOW do they learn best? (videos, reading, hands-on projects, structured courses, etc.)
-  Question 6: FEAR — What worries or intimidates them about starting this journey?
-  Question 7: TIME & COMMITMENT — Describe a typical week. How many hours realistically can they dedicate?
-
-These 4 motivational questions are critical — the roadmap uses these answers to calibrate learning style, pacing, and motivation triggers.`
-}
-
-function buildTargetedPrompt({ goalId, goalTitle, branch, semester, whatYouKnow }) {
-  return `STUDENT PROFILE:
-Career Goal: ${goalTitle} (${goalId})
-Branch: ${branch} | Semester: ${semester}
-What student claims to know:
+What student knows (interpret intelligently — could be keywords, phrases, or full sentences):
 """
-${whatYouKnow}
+${whatYouKnow || 'Student has not described any prior knowledge.'}
 """
 
-Generate 7 TARGETED MODE questions to verify claims and find real gaps:
+IMPORTANT: The student may write in shorthand like "c java python" or "dsa oops" or "html css js".
+Treat each word/phrase as a topic they have some exposure to and generate questions accordingly.
+If they wrote nothing or very little, treat them as a beginner and ask foundational questions.
+Never say "you mentioned..." — just ask the question directly.
 
-Questions 1, 2, 3 → level: "basic" — Verify specific things they mentioned
-  - Pick 3 concrete claims from their "what I know" text
-  - Ask them to explain or demonstrate each — not just confirm they know it
-  - Example: If they said "I know arrays", ask "Explain the time complexity of insertion at the beginning of an array vs end, and why?"
+Generate 7 questions:
 
-Questions 4, 5 → level: "intermediate" — Test one level deeper than their claims
-  - Choose 2 topics that naturally follow from what they know
-  - These are the most likely GAPS — things they'd need next but haven't mentioned
+Questions 1, 2, 3 → level: "basic"
+  - If student mentioned specific topics: ask them to explain a concept, difference, or use-case for those topics
+  - If student knows nothing: ask foundational awareness questions about ${goalTitle}
+  - Keep it conversational, not intimidating
 
-Question 6 → level: "intermediate" — One small practical problem
-  - A real mini-problem directly relevant to ${goalTitle}
-  - Should take 4–8 sentences to answer well if they truly know the relevant concept
+Questions 4, 5 → level: "intermediate"
+  - Go one level deeper than their claimed knowledge
+  - If they know nothing, ask what they think the next step after basics would be
+  - These should reveal whether they truly understand or just know the name
 
-Question 7 → level: "basic" — Honest self-reflection
-  - "Among everything you mentioned knowing, which specific area do you feel LEAST confident about when someone asks you to explain or use it? Why?"
+Question 6 → level: "intermediate"
+  - A small practical scenario or problem relevant to ${goalTitle}
+  - Something they would encounter in a real job
 
-Make every question directly tied to what they wrote — no generic filler questions.`
+Question 7 → level: "basic" — Self-reflection
+  - Ask which topic from their background they feel least confident explaining, and why
+  - If they wrote nothing, ask what excites them most about ${goalTitle} and why they chose it
+
+Make every question specific to their stated topics and to ${goalTitle}. Zero generic filler.`
 }
 
-/**
- * generateAssessmentQuestions
- * @param {object} params
- * @param {string} params.goalId
- * @param {string} params.goalTitle
- * @param {string} params.branch
- * @param {number} params.semester
- * @param {string} params.whatYouKnow
- * @returns {Promise<{ mode: string, questions: Array }>}
- */
 export async function generateAssessmentQuestions({
   goalId, goalTitle, branch, semester, whatYouKnow = ''
 }) {
-  const isBeginnerMode = studentKnowsNothing(whatYouKnow)
-
-  const userPrompt = isBeginnerMode
-    ? buildBeginnerPrompt({ goalId, goalTitle, branch, semester })
-    : buildTargetedPrompt({ goalId, goalTitle, branch, semester, whatYouKnow })
+  const userPrompt = buildPrompt({ goalId, goalTitle, branch, semester, whatYouKnow })
 
   const result = await callGeminiJSON(SYSTEM, userPrompt)
 
@@ -115,7 +104,6 @@ export async function generateAssessmentQuestions({
     throw new Error(`Expected 7 questions, got ${result.questions?.length ?? 0}`)
   }
 
-  // Normalize ids
   result.questions = result.questions.map((q, i) => ({ ...q, id: i + 1 }))
   return result
 }

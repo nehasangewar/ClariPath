@@ -6,4 +6,4 @@ spring.jpa.show-sql=true
 spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
 server.port=8080
 jwt.secret=claripath-super-secret-jwt-key-2026
-gemini.API.key
+gemini.api.key

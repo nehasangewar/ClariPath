@@ -34,41 +34,43 @@ public class AdminService {
         this.authenticationManager = authenticationManager;
     }
 
-    // ===============================
-    // ADMIN LOGIN
-    // ===============================
     public AuthResponse login(String email, String password) {
 
-        // Authenticate credentials
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(email, password)
         );
 
-        // Fetch user
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // ✅ Reject non-admin users
         if (user.getRole() != Role.ADMIN) {
             throw new BadCredentialsException("Access denied: not an admin");
         }
 
-        // Generate JWT
         String token = jwtService.generateToken(user.getEmail());
 
         AuthResponse.UserInfo userInfo = new AuthResponse.UserInfo(
                 user.getId(),
                 user.getName(),
                 user.getEmail(),
-                user.getRole().name()
+                user.getRole().name(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
         );
 
         return new AuthResponse(token, userInfo);
     }
 
-    // ===============================
-    // SYLLABUS
-    // ===============================
     public Syllabus addSyllabus(Syllabus syllabus) {
         return syllabusRepository.save(syllabus);
     }

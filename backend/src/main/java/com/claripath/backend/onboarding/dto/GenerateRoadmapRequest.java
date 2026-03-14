@@ -13,6 +13,7 @@ public class GenerateRoadmapRequest {
     private List<String> assessmentAnswers;
     private Long collegeId;
     private Long branchId;
+    private String roadmapJson;
 // + getters and setters
 
     // Getters
@@ -21,11 +22,18 @@ public class GenerateRoadmapRequest {
 
     public String getBranch() { return branch; }
 
+    public String getRoadmapJson() { return roadmapJson; }
+
     public Integer getSemester() { return semester; }
 
     public String getConfirmedGoal() { return confirmedGoal; }
 
     public String getWhatYouKnow() { return whatYouKnow; }
+
+    private String college;
+
+public String getCollege() { return college; }
+public void setCollege(String college) { this.college = college; }
 
     public List<String> getAssessmentAnswers() { return assessmentAnswers; }
     public Long getCollegeId() { return collegeId; }
@@ -37,6 +45,8 @@ public class GenerateRoadmapRequest {
     public void setUserId(Long userId) { this.userId = userId; }   // ✅ NEW SETTER
 
     public void setBranch(String branch) { this.branch = branch; }
+
+    public void setRoadmapJson(String roadmapJson) { this.roadmapJson = roadmapJson; }
 
     public void setSemester(Integer semester) { this.semester = semester; }
 

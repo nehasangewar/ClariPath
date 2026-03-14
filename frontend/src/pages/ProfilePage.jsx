@@ -14,19 +14,22 @@ const C = {
 
 // ─── AI HELPER ────────────────────────────────────────────────────────────────
 async function callAI(systemPrompt, userMessage) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const token = localStorage.getItem('token')
+  const res = await fetch("http://localhost:8080/api/ai/generate", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
-      messages: [{ role: "user", content: `SYSTEM: ${systemPrompt}\n\nUSER: ${userMessage}` }],
-    }),
-  });
-  const data = await res.json();
-  const text = data.content?.map(b => b.text || "").join("") || "";
-  try { return JSON.parse(text.replace(/```json|```/g, "").trim()); }
-  catch { return { raw: text }; }
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    },
+    body: JSON.stringify({ systemPrompt, userMessage }),
+  })
+  const data = await res.json()
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
+  try {
+    return JSON.parse(text.replace(/```json|```/g, "").trim())
+  } catch {
+    return { raw: text }
+  }
 }
 
 // ─── DEFAULT STUDENT DATA (override via props in real app) ────────────────────

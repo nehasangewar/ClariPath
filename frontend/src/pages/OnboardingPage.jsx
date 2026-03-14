@@ -53,7 +53,7 @@ function DetailCard({ icon, label, value, C, highlight }) {
 
 export default function OnboardingPage() {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, completeOnboarding } = useAuth()
 
   const [screen, setScreen] = useState('welcome')
   const [branch, setBranch] = useState('')
@@ -197,7 +197,6 @@ export default function OnboardingPage() {
     </div>
   )
 
-  // ── BACKGROUND DECORATION (shared) ──
   const BgDecor = () => (
     <>
       <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse at 15% 40%, rgba(251,191,36,0.14) 0%, transparent 50%), radial-gradient(ellipse at 85% 30%, rgba(180,83,9,0.08) 0%, transparent 45%)` }} />
@@ -247,7 +246,7 @@ export default function OnboardingPage() {
     setScreen('whatyouknow')
   }
 
-  // ── HANDLER: WHAT YOU KNOW → Generate 7 AI Questions ──────────────────────
+  // ── HANDLER: WHAT YOU KNOW → Generate 7 AI Questions ──
   const handleWhatYouKnowNext = async () => {
     if (!whatYouKnow.trim()) return
     setAssessmentError('')
@@ -264,11 +263,7 @@ export default function OnboardingPage() {
         whatYouKnow,
       })
 
-      // Store rich question objects on window so handleAssessNext can access
-      // topic + difficulty per question when building the roadmap payload
       window.__claripath_assessmentQuestions = result.questions
-
-      // generatedQuestions = just the question strings (what the UI renders)
       setGeneratedQuestions(result.questions.map(q => q.question))
       setCurrentQ(0)
       setCurrentAnswer('')
@@ -276,8 +271,6 @@ export default function OnboardingPage() {
 
     } catch (err) {
       console.error('[AssessmentGenerator] Failed:', err)
-      // Graceful fallback — 3 basic + 4 motivational hardcoded questions
-      // so the flow never breaks even if Gemini is down
       const goalTitle = confirmedGoal?.title || 'this field'
       const fallbackQuestions = [
         { id: 1, question: `What do you think someone working in ${goalTitle} does on a typical day?`, topic: 'General', difficulty: 'BASIC', type: 'TECHNICAL' },
@@ -296,7 +289,7 @@ export default function OnboardingPage() {
     }
   }
 
-  // ── HANDLER: ASSESSMENT NEXT → on last Q, generate roadmap ────────────────
+  // ── HANDLER: ASSESSMENT NEXT → on last Q, generate roadmap ──
   const handleAssessNext = async () => {
     if (!currentAnswer.trim()) return
 
@@ -311,13 +304,12 @@ export default function OnboardingPage() {
       return
     }
 
-    // ── Last question submitted → generate roadmap ──────────────────────────
+    // ── Last question submitted → generate roadmap ──
     setLoadingMessage('Building your personalised 16-week roadmap...')
     setLoadingSubMessage('Detecting your true level · Aligning with your syllabus · Creating 16 weeks of tasks')
     setScreen('loading')
 
     try {
-      // Rebuild full Q&A array with topic + difficulty from stored question objects
       const storedQuestions = window.__claripath_assessmentQuestions || []
       const assessmentQnA = generatedQuestions.map((q, i) => ({
         question:   q,
@@ -329,7 +321,8 @@ export default function OnboardingPage() {
 
       const userId = user?.id || user?.userId || localStorage.getItem('userId') || 'guest'
 
-      const { roadmapId, levelData } = await generateAndSaveRoadmap({
+      // ── FIX: destructure safely with fallback defaults ──
+      const result = await generateAndSaveRoadmap({
         userId,
         goalId:      confirmedGoal?.id        || confirmedGoal?.goalType || 'sde',
         goalTitle:   confirmedGoal?.title     || 'Software Engineer',
@@ -340,31 +333,38 @@ export default function OnboardingPage() {
         whatYouKnow,
         assessmentQnA,
       })
-       
-      const { completeOnboarding } = useAuth()
 
+      // ── FIX: guard against undefined result or levelData ──
+      const roadmapId = result?.roadmapId ?? null
+      const levelData = result?.levelData ?? {}
 
+      completeOnboarding()
 
-      // Navigate to dashboard — roadmap is saved in DB, DashboardPage fetches it
       navigate('/dashboard', {
         state: {
-          freshRoadmap: true,
+          freshRoadmap:  true,
           roadmapId,
-          trueLevel:  levelData.trueLevel,
-          goalTitle:  confirmedGoal?.title,
+          trueLevel:     levelData?.trueLevel     ?? 'BEGINNER',
+          skipTopics:    levelData?.skipTopics     ?? [],
+          startPoint:    levelData?.startPoint     ?? '',
+          goalTitle:     confirmedGoal?.title      ?? '',
+          goalId:        confirmedGoal?.id         ?? '',
+          branch:        branch                    ?? '',
+          semester:      typeof semester === 'number' ? semester : parseInt(semester) || 3,
+          hoursPerWeek,
+          mode,
         }
       })
 
     } catch (err) {
       console.error('[RoadmapGenerator] Failed:', err)
-      // Even if roadmap generation fails, still go to dashboard
-      // Dashboard will show its hardcoded fallback data
-      navigate('/dashboard', {
-        state: {
-          freshRoadmap: false,
-          error: 'Roadmap generation failed — showing default roadmap. You can retry from settings.',
-        }
-      })
+      // Don't navigate — show error and let user retry
+      setLoadingMessage('Generation failed — please try again')
+      setLoadingSubMessage(err.message || 'Gemini was unavailable. Click below to retry.')
+      setScreen('assessment')
+      setCurrentQ(generatedQuestions.length - 1)
+      setCurrentAnswer(Object.values(assessAnswers).at(-1) || '')
+      setAssessmentError('⚠️ Roadmap generation failed: ' + (err.message || 'Please try again in a moment.'))
     }
   }
 
@@ -489,6 +489,32 @@ export default function OnboardingPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 6 }}>
             {SEMESTERS.map(s => (
               <button key={s} className="ob-option" onClick={() => setSemester(s)} style={{ ...optionBtn(semester === s), textAlign: 'center', padding: '10px 4px' }}>{s}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Hours per week */}
+        <div style={{ marginBottom: 22 }}>
+          <label style={labelStyle}>How many hours per week can you dedicate to learning?</label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            {[5, 8, 10, 15, 20, 25].map(h => (
+              <button key={h} className="ob-option" onClick={() => setHoursPerWeek(h)} style={{ ...optionBtn(hoursPerWeek === h), textAlign: 'center' }}>
+                {h} hrs/week
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Mode */}
+        <div style={{ marginBottom: 22 }}>
+          <label style={labelStyle}>What is your primary goal right now?</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[
+              { value: 'Placement', label: 'Placement — I want to get a full-time job after graduation' },
+              { value: 'Internship', label: 'Internship — I want to land an internship this semester' },
+              { value: 'Skill Building', label: 'Skill Building — I want to learn and grow at my own pace' },
+            ].map(m => (
+              <button key={m.value} className="ob-option" onClick={() => setMode(m.value)} style={optionBtn(mode === m.value)}>{m.label}</button>
             ))}
           </div>
         </div>

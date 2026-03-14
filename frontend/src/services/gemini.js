@@ -12,7 +12,7 @@ const GEMINI_URL     = `https://generativelanguage.googleapis.com/v1beta/models/
  * @param {string} userPrompt         - Full context + request
  * @returns {string}                  - Raw text from Gemini
  */
-export async function callGemini(systemInstruction, userPrompt) {
+export async function callGemini(systemInstruction, userPrompt, maxTokens = 65536) {
   const body = {
     system_instruction: {
       parts: [{ text: systemInstruction }]
@@ -22,7 +22,7 @@ export async function callGemini(systemInstruction, userPrompt) {
     ],
     generationConfig: {
       temperature: 0.7,
-      maxOutputTokens: 8192,
+      maxOutputTokens: maxTokens,
       responseMimeType: 'application/json'  // forces JSON at model level
     }
   }
@@ -49,12 +49,26 @@ export async function callGemini(systemInstruction, userPrompt) {
  * Strips accidental markdown fences and parses.
  * @returns {object}
  */
-export async function callGeminiJSON(systemInstruction, userPrompt) {
-  const raw = await callGemini(systemInstruction, userPrompt)
-  const clean = raw.replace(/```json|```/gi, '').trim()
+export async function callGeminiJSON(systemInstruction, userPrompt, maxTokens = 65536) {
+  const raw = await callGemini(systemInstruction, userPrompt, maxTokens)
+
+  // Strip markdown fences aggressively
+  const clean = raw
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim()
+
   try {
     return JSON.parse(clean)
   } catch (e) {
+    // Fallback: extract the JSON object directly from the response
+    const match = raw.match(/\{[\s\S]*\}/)
+    if (match) {
+      try {
+        return JSON.parse(match[0])
+      } catch {}
+    }
     console.error('[Gemini] JSON parse failed. Raw output:', raw)
     throw new Error('Failed to parse Gemini response as JSON. Check console.')
   }
