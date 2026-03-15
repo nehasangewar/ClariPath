@@ -26,30 +26,20 @@ function LoginPage() {
   }
 
   const handleSubmit = async () => {
-  setLoading(true); setError('')
-  try {
-    const res = await api.post('/api/auth/login', { email, password })
-    
-    // ── Wait for login + roadmap check to complete ──
-    await login(res.data.user, res.data.token)
+    setLoading(true); setError('')
+    try {
+      const res = await api.post('/api/auth/login', { email, password })
 
-    // ── Check profile status from backend ──
-    const profileRes = await api.get('/api/profile/me', {
-      headers: { Authorization: `Bearer ${res.data.token}` }
-    })
+      // login() checks roadmap and returns '/dashboard' or '/onboarding'
+      const destination = await login(res.data.user, res.data.token)
+      navigate(destination)
 
-    if (profileRes.data.status === 'ONBOARDING') {
-      navigate('/onboarding')
-    } else {
-      navigate('/dashboard')
+    } catch {
+      setError('Invalid email or password. Please try again.')
+    } finally {
+      setLoading(false)
     }
-
-  } catch {
-    setError('Invalid email or password. Please try again.')
-  } finally { 
-    setLoading(false) 
   }
-}
 
   const handleForgot = async () => {
     if (!forgotEmail) { setForgotError('Please enter your email address.'); return }
@@ -134,7 +124,7 @@ function LoginPage() {
       `}</style>
 
       {/* ══════════════════════════════
-          LEFT PANEL — exact same as RegisterPage
+          LEFT PANEL
       ══════════════════════════════ */}
       <div className="hidden lg:flex" style={{
         width: '45%', position: 'relative', overflow: 'hidden',
@@ -143,69 +133,29 @@ function LoginPage() {
         borderRight: `1px solid ${C.border}`,
       }}>
 
-        {/* Background warm texture */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: `
-            radial-gradient(ellipse at 20% 30%, rgba(251,191,36,0.2) 0%, transparent 50%),
-            radial-gradient(ellipse at 80% 70%, rgba(180,83,9,0.1) 0%, transparent 45%)
-          `,
-        }} />
+        <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse at 20% 30%, rgba(251,191,36,0.2) 0%, transparent 50%), radial-gradient(ellipse at 80% 70%, rgba(180,83,9,0.1) 0%, transparent 45%)` }} />
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: `radial-gradient(rgba(180,83,9,0.1) 1px, transparent 1px)`, backgroundSize: '36px 36px', maskImage: 'radial-gradient(ellipse at center, black 20%, transparent 80%)' }} />
 
-        {/* Dot grid */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          backgroundImage: `radial-gradient(rgba(180,83,9,0.1) 1px, transparent 1px)`,
-          backgroundSize: '36px 36px',
-          maskImage: 'radial-gradient(ellipse at center, black 20%, transparent 80%)',
-        }} />
-
-        {/* ── ORBIT 1 — center ── */}
-        <div style={{
-          position: 'absolute', top: '50%', left: '50%',
-          width: 400, height: 400, marginTop: -200, marginLeft: -200,
-          borderRadius: '50%',
-          border: '1.5px solid rgba(180,83,9,0.18)',
-          boxShadow: '0 0 0 1px rgba(251,191,36,0.06)',
-          animation: 'spin-slow 38s linear infinite',
-        }}>
+        <div style={{ position:'absolute', top:'50%', left:'50%', width:400, height:400, marginTop:-200, marginLeft:-200, borderRadius:'50%', border:'1.5px solid rgba(180,83,9,0.18)', boxShadow:'0 0 0 1px rgba(251,191,36,0.06)', animation:'spin-slow 38s linear infinite' }}>
           <div style={{ position:'absolute', top:-8, left:'50%', transform:'translateX(-50%)', width:15, height:15, borderRadius:'50%', background:'radial-gradient(circle, #fde68a 20%, #b45309)', boxShadow:'0 0 16px #d97706, 0 0 30px rgba(180,83,9,0.3)' }} />
           <div style={{ position:'absolute', bottom:-6, left:'50%', transform:'translateX(-50%)', width:9, height:9, borderRadius:'50%', background:'#d97706', boxShadow:'0 0 10px rgba(217,119,6,0.5)' }} />
           <div style={{ position:'absolute', top:'50%', right:-6, transform:'translateY(-50%)', width:9, height:9, borderRadius:'50%', background:'#f59e0b', boxShadow:'0 0 10px rgba(245,158,11,0.5)' }} />
         </div>
-        <div style={{
-          position: 'absolute', top: '50%', left: '50%',
-          width: 270, height: 270, marginTop: -135, marginLeft: -135,
-          borderRadius: '50%',
-          border: '1px dashed rgba(180,83,9,0.12)',
-          animation: 'spin-slow-reverse 50s linear infinite',
-        }}>
+        <div style={{ position:'absolute', top:'50%', left:'50%', width:270, height:270, marginTop:-135, marginLeft:-135, borderRadius:'50%', border:'1px dashed rgba(180,83,9,0.12)', animation:'spin-slow-reverse 50s linear infinite' }}>
           <div style={{ position:'absolute', top:'50%', left:-6, transform:'translateY(-50%)', width:11, height:11, borderRadius:'50%', background:'radial-gradient(circle, #c4b5fd 20%, #7c3aed)', boxShadow:'0 0 12px rgba(124,58,237,0.55)' }} />
           <div style={{ position:'absolute', bottom:-5, left:'50%', transform:'translateX(-50%)', width:7, height:7, borderRadius:'50%', background:'#3b82f6', boxShadow:'0 0 10px rgba(59,130,246,0.5)' }} />
         </div>
         <div style={{ position:'absolute', top:'50%', left:'50%', width:140, height:140, marginTop:-70, marginLeft:-70, borderRadius:'50%', background:'radial-gradient(circle, rgba(251,191,36,0.12), rgba(180,83,9,0.04), transparent 70%)', filter:'blur(10px)', animation:'drift 10s ease-in-out infinite' }} />
 
-        {/* ── ORBIT 2 — top right ── */}
-        <div style={{
-          position: 'absolute', top: '2%', right: '-3%',
-          width: 210, height: 210, borderRadius: '50%',
-          border: '1.5px solid rgba(180,83,9,0.16)',
-          animation: 'spin-slow 28s linear infinite',
-        }}>
+        <div style={{ position:'absolute', top:'2%', right:'-3%', width:210, height:210, borderRadius:'50%', border:'1.5px solid rgba(180,83,9,0.16)', animation:'spin-slow 28s linear infinite' }}>
           <div style={{ position:'absolute', top:-7, left:'50%', transform:'translateX(-50%)', width:13, height:13, borderRadius:'50%', background:'radial-gradient(circle, #fde68a 20%, #b45309)', boxShadow:'0 0 14px #d97706, 0 0 26px rgba(180,83,9,0.25)' }} />
           <div style={{ position:'absolute', top:'50%', right:-5, transform:'translateY(-50%)', width:8, height:8, borderRadius:'50%', background:'#f59e0b', boxShadow:'0 0 8px rgba(245,158,11,0.5)' }} />
         </div>
-        <div style={{
-          position: 'absolute', top: 'calc(2% + 35px)', right: 'calc(-3% + 35px)',
-          width: 140, height: 140, borderRadius: '50%',
-          border: '1px dashed rgba(124,58,237,0.14)',
-          animation: 'spin-slow-reverse 22s linear infinite',
-        }}>
+        <div style={{ position:'absolute', top:'calc(2% + 35px)', right:'calc(-3% + 35px)', width:140, height:140, borderRadius:'50%', border:'1px dashed rgba(124,58,237,0.14)', animation:'spin-slow-reverse 22s linear infinite' }}>
           <div style={{ position:'absolute', top:-5, left:'50%', transform:'translateX(-50%)', width:9, height:9, borderRadius:'50%', background:'radial-gradient(circle, #ddd6fe 20%, #7c3aed)', boxShadow:'0 0 12px rgba(124,58,237,0.55)' }} />
         </div>
         <div style={{ position:'absolute', top:'4%', right:'1%', width:110, height:110, borderRadius:'50%', background:'radial-gradient(circle, rgba(180,83,9,0.09), transparent)', filter:'blur(14px)', animation:'drift 10s ease-in-out infinite 2s' }} />
 
-        {/* Content */}
         <div style={{ position:'relative', zIndex:10 }}>
           <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:48 }}>
             <div style={{ width:40, height:40, borderRadius:12, background:'linear-gradient(135deg, #b45309, #d97706)', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 14px rgba(180,83,9,0.3)' }}>
@@ -274,7 +224,6 @@ function LoginPage() {
 
             <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
 
-              {/* Email — identical style to register inputs */}
               <div>
                 <label style={labelStyle}>Email Address</label>
                 <input
@@ -288,7 +237,6 @@ function LoginPage() {
                 />
               </div>
 
-              {/* Password */}
               <div>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:5 }}>
                   <label style={{ ...labelStyle, marginBottom:0 }}>Password</label>
@@ -312,7 +260,6 @@ function LoginPage() {
                 </div>
               </div>
 
-              {/* Submit */}
               <button
                 className="btn-gold"
                 onClick={handleSubmit}
@@ -338,7 +285,6 @@ function LoginPage() {
               </button>
             </div>
 
-            {/* Divider */}
             <div style={{ display:'flex', alignItems:'center', gap:12, margin:'20px 0' }}>
               <div style={{ flex:1, height:1, background:C.border }} />
               <span style={{ fontSize:12, color:C.textLight }}>Don't have an account?</span>
@@ -346,12 +292,7 @@ function LoginPage() {
             </div>
 
             <Link to="/register" style={{ textDecoration:'none' }}>
-              <div style={{
-                width:'100%', padding:'12px', borderRadius:12, textAlign:'center',
-                background:C.white, border:`1.5px solid ${C.border}`,
-                color:C.textMid, fontWeight:600, fontSize:14, cursor:'pointer',
-                boxSizing:'border-box', display:'block',
-              }}>
+              <div style={{ width:'100%', padding:'12px', borderRadius:12, textAlign:'center', background:C.white, border:`1.5px solid ${C.border}`, color:C.textMid, fontWeight:600, fontSize:14, cursor:'pointer', boxSizing:'border-box', display:'block' }}>
                 Create an account
               </div>
             </Link>

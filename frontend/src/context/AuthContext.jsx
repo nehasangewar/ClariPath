@@ -16,33 +16,50 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  // login() returns '/dashboard' or '/onboarding' — use the return value in LoginPage
   const login = async (userData, jwtToken) => {
-  setUser(userData)
-  setToken(jwtToken)
-  localStorage.setItem('token', jwtToken)
-  localStorage.setItem('user', JSON.stringify(userData))
+    setUser(userData)
+    setToken(jwtToken)
+    localStorage.setItem('token', jwtToken)
+    localStorage.setItem('user', JSON.stringify(userData))
 
-  try {
-    setCheckingRoadmap(true)
-    const res = await fetch('http://localhost:8080/api/roadmap/current', {
-      headers: { 'Authorization': `Bearer ${jwtToken}` }
-    })
+    try {
+      setCheckingRoadmap(true)
+      const res = await fetch('http://localhost:8080/api/profile/me', {
+        headers: { 'Authorization': `Bearer ${jwtToken}` }
+      })
 
-    if (res.ok) {
-      const text = await res.text()
-      if (text && text.trim().length > 0) {
-        // Roadmap exists — mark onboarding complete
-        const updated = { ...userData, onboardingComplete: true }
-        setUser(updated)
-        localStorage.setItem('user', JSON.stringify(updated))
+      if (res.ok) {
+        // Safely parse — endpoint may return empty body
+        const text = await res.text()
+        if (text && text.trim().length > 0) {
+          const data = JSON.parse(text)
+          // Any status other than 'ONBOARDING' means onboarding is done
+          if (data.status && data.status !== 'ONBOARDING') {
+            const updated = { ...userData, onboardingComplete: true }
+            setUser(updated)
+            localStorage.setItem('user', JSON.stringify(updated))
+            return '/dashboard'
+          }
+        }
       }
+    } catch (err) {
+      console.warn('Could not check profile status', err)
+    } finally {
+      setCheckingRoadmap(false)
     }
-  } catch (err) {
-    console.warn('Could not check roadmap status', err)
-  } finally {
-    setCheckingRoadmap(false)
+
+    // status is ONBOARDING, empty response, or request failed → onboarding
+    return '/onboarding'
   }
-}
+
+  // register() — never sets onboardingComplete, ProtectedRoute sends to /onboarding
+  const register = (userData, jwtToken) => {
+    setUser(userData)
+    setToken(jwtToken)
+    localStorage.setItem('token', jwtToken)
+    localStorage.setItem('user', JSON.stringify(userData))
+  }
 
   const logout = () => {
     setUser(null)
@@ -58,7 +75,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, completeOnboarding, checkingRoadmap }}>
+    <AuthContext.Provider value={{ user, token, login, register, logout, completeOnboarding, checkingRoadmap }}>
       {children}
     </AuthContext.Provider>
   )

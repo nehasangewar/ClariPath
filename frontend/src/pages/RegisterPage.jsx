@@ -70,7 +70,8 @@ function RegisterPage() {
   const [loadingColleges, setLoadingColleges] = useState(false)
 
   const navigate = useNavigate()
-  const { login } = useAuth()
+  // ── CHANGED: use `register` instead of `login` ──
+  const { register } = useAuth()
 
   useEffect(() => {
     api.get('/api/universities')
@@ -110,8 +111,8 @@ function RegisterPage() {
         email,
         password
       })
-      // Auto-login after registration and go straight to onboarding
-      login(res.data.user, res.data.token)
+      // ── CHANGED: call register() not login() — always goes to onboarding ──
+      register(res.data.user, res.data.token)
       navigate('/onboarding')
     } catch {
       setError('Registration failed. Please try again.')
@@ -222,7 +223,6 @@ function RegisterPage() {
       <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'40px 24px', background:C.bg, overflowY:'auto' }}>
         <div style={{ width:'100%', maxWidth:420 }}>
 
-          {/* Mobile logo */}
           <div className="flex lg:hidden" style={{ alignItems:'center', gap:10, marginBottom:28 }}>
             <div style={{ width:34, height:34, borderRadius:10, background:'linear-gradient(135deg,#b45309,#d97706)', display:'flex', alignItems:'center', justifyContent:'center' }}>
               <span className="playfair" style={{ color:'white', fontWeight:900, fontSize:15 }}>C</span>
@@ -230,13 +230,11 @@ function RegisterPage() {
             <span className="playfair" style={{ fontWeight:800, fontSize:18, color:C.text }}>ClariPath</span>
           </div>
 
-          {/* Header */}
           <div style={{ marginBottom:28 }}>
             <h3 className="playfair" style={{ fontSize:28, fontWeight:900, color:C.text, marginBottom:6, letterSpacing:'-0.02em' }}>Create your account</h3>
             <p style={{ fontSize:14, color:C.textLight }}>Get your personalised roadmap in under 10 minutes</p>
           </div>
 
-          {/* Error */}
           {error && (
             <div style={{ display:'flex', alignItems:'center', gap:8, background:'#fef2f2', border:'1px solid #fecaca', color:'#dc2626', fontSize:13, padding:'12px 16px', borderRadius:12, marginBottom:20 }}>
               ⚠ {error}
@@ -245,7 +243,6 @@ function RegisterPage() {
 
           <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
 
-            {/* First / Middle / Last Name */}
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10 }}>
               <div>
                 <label style={labelStyle}>First Name <Req /></label>
@@ -261,7 +258,6 @@ function RegisterPage() {
               </div>
             </div>
 
-            {/* University */}
             <div>
               <label style={labelStyle}>University <Req /></label>
               <div style={{ position:'relative' }}>
@@ -276,7 +272,6 @@ function RegisterPage() {
               </div>
             </div>
 
-            {/* College */}
             <div>
               <label style={labelStyle}>College <Req /></label>
               <div style={{ position:'relative' }}>
@@ -299,13 +294,11 @@ function RegisterPage() {
               )}
             </div>
 
-            {/* Email */}
             <div>
               <label style={labelStyle}>Email Address <Req /></label>
               <input className="reg-input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" style={inputStyle} />
             </div>
 
-            {/* Password */}
             <div>
               <label style={labelStyle}>Password <Req /></label>
               <div style={{ position:'relative' }}>
@@ -339,7 +332,6 @@ function RegisterPage() {
               })()}
             </div>
 
-            {/* Confirm Password */}
             <div>
               <label style={labelStyle}>Confirm Password <Req /></label>
               <div style={{ position:'relative' }}>
@@ -353,7 +345,6 @@ function RegisterPage() {
               )}
             </div>
 
-            {/* Submit */}
             <button className="btn-gold" onClick={handleSubmit} disabled={loading}
               style={{
                 width:'100%', padding:'13px', borderRadius:'12px', border:'none',
@@ -376,7 +367,6 @@ function RegisterPage() {
             </button>
           </div>
 
-          {/* Divider */}
           <div style={{ display:'flex', alignItems:'center', gap:12, margin:'20px 0' }}>
             <div style={{ flex:1, height:1, background:C.border }} />
             <span style={{ fontSize:12, color:C.textLight }}>Already have an account?</span>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { QUESTION_OPTIONS, scoreAnswers } from '../utils/goalMapping'
@@ -51,6 +51,197 @@ function DetailCard({ icon, label, value, C, highlight }) {
   );
 }
 
+// ── BUILDING ROADMAP SCREEN ──
+function BuildingRoadmapScreen({ goalTitle, onComplete }) {
+  const steps = [
+    { icon: '🔍', text: 'Analysing your assessment answers...' },
+    { icon: '🧠', text: 'Detecting your true skill level...' },
+    { icon: '📚', text: 'Mapping topics to your syllabus...' },
+    { icon: '🗓️', text: 'Distributing tasks across 16 weeks...' },
+    { icon: '⚡', text: 'Calibrating difficulty progression...' },
+    { icon: '🎯', text: 'Aligning with your career goal...' },
+    { icon: '✅', text: 'Finalising your personalised roadmap...' },
+  ]
+
+  const [activeStep, setActiveStep] = useState(0)
+  const [completedSteps, setCompletedSteps] = useState([])
+  const [done, setDone] = useState(false)
+  const timerRef = useRef(null)
+
+  useEffect(() => {
+    const totalDuration = 9000 // 9 seconds total
+    const stepInterval = totalDuration / steps.length // ~1285ms per step
+
+    let step = 0
+    const tick = () => {
+      if (step < steps.length - 1) {
+        setCompletedSteps(prev => [...prev, step])
+        step++
+        setActiveStep(step)
+        timerRef.current = setTimeout(tick, stepInterval)
+      } else {
+        // Last step — mark complete, wait a beat, then navigate
+        setCompletedSteps(prev => [...prev, step])
+        setDone(true)
+        timerRef.current = setTimeout(() => {
+          onComplete()
+        }, 1200)
+      }
+    }
+
+    timerRef.current = setTimeout(tick, stepInterval)
+    return () => clearTimeout(timerRef.current)
+  }, [])
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: C.bg,
+      fontFamily: "'DM Sans', system-ui, sans-serif",
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '24px',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@700;800;900&display=swap');
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes spin-slow { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+        @keyframes spin-slow-reverse { from{transform:rotate(360deg)} to{transform:rotate(0deg)} }
+        @keyframes fadeInUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes shimmer-gold { 0%{background-position:-200% center} 100%{background-position:200% center} }
+        @keyframes pulse-dot { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.4);opacity:0.6} }
+        .playfair { font-family: 'Playfair Display', Georgia, serif; }
+        .gold-text {
+          background: linear-gradient(135deg, #b45309, #d97706, #f59e0b, #d97706, #b45309);
+          background-size: 300% auto;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: shimmer-gold 4s linear infinite;
+        }
+      `}</style>
+
+      {/* Background orbits */}
+      <div style={{ position:'absolute', inset:0, background:`radial-gradient(ellipse at 15% 40%, rgba(251,191,36,0.14) 0%, transparent 50%), radial-gradient(ellipse at 85% 30%, rgba(180,83,9,0.08) 0%, transparent 45%)` }} />
+      <div style={{ position:'absolute', inset:0, backgroundImage:`radial-gradient(rgba(180,83,9,0.08) 1px, transparent 1px)`, backgroundSize:'40px 40px', maskImage:'radial-gradient(ellipse at center, black 0%, transparent 75%)' }} />
+      <div style={{ position:'absolute', top:'50%', left:'50%', width:500, height:500, marginTop:-250, marginLeft:-250, borderRadius:'50%', border:'1.5px solid rgba(180,83,9,0.12)', animation:'spin-slow 40s linear infinite', pointerEvents:'none' }}>
+        <div style={{ position:'absolute', top:-7, left:'50%', transform:'translateX(-50%)', width:13, height:13, borderRadius:'50%', background:'radial-gradient(circle, #fde68a 20%, #b45309)', boxShadow:'0 0 14px #d97706' }} />
+        <div style={{ position:'absolute', bottom:-5, left:'50%', transform:'translateX(-50%)', width:8, height:8, borderRadius:'50%', background:'#d97706' }} />
+      </div>
+      <div style={{ position:'absolute', top:'50%', left:'50%', width:340, height:340, marginTop:-170, marginLeft:-170, borderRadius:'50%', border:'1px dashed rgba(180,83,9,0.08)', animation:'spin-slow-reverse 55s linear infinite', pointerEvents:'none' }}>
+        <div style={{ position:'absolute', top:'50%', left:-5, transform:'translateY(-50%)', width:9, height:9, borderRadius:'50%', background:'radial-gradient(circle, #c4b5fd 20%, #7c3aed)', boxShadow:'0 0 10px rgba(124,58,237,0.5)' }} />
+      </div>
+
+      <div style={{ position:'relative', zIndex:1, width:'100%', maxWidth:480, textAlign:'center' }}>
+
+        {/* Logo */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, marginBottom:40 }}>
+          <div style={{ width:40, height:40, borderRadius:12, background:'linear-gradient(135deg, #b45309, #d97706)', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 4px 14px rgba(180,83,9,0.3)' }}>
+            <span className="playfair" style={{ color:'white', fontWeight:900, fontSize:18 }}>C</span>
+          </div>
+          <span className="playfair" style={{ color:C.text, fontWeight:800, fontSize:20 }}>ClariPath</span>
+        </div>
+
+        {/* Header */}
+        <div style={{ marginBottom: 36 }}>
+          {!done ? (
+            <>
+              <h2 className="playfair" style={{ fontSize:28, fontWeight:900, color:C.text, marginBottom:10, letterSpacing:'-0.02em' }}>
+                Building your <span className="gold-text">roadmap</span>
+              </h2>
+              <p style={{ fontSize:14, color:C.textLight, lineHeight:1.65 }}>
+                Personalising 16 weeks of tasks for <strong style={{ color:C.textMid }}>{goalTitle || 'your goal'}</strong>
+              </p>
+            </>
+          ) : (
+            <>
+              <h2 className="playfair" style={{ fontSize:28, fontWeight:900, color:C.text, marginBottom:10, letterSpacing:'-0.02em' }}>
+                🎉 Your roadmap is <span className="gold-text">ready!</span>
+              </h2>
+              <p style={{ fontSize:14, color:C.textLight, lineHeight:1.65 }}>
+                Taking you to your dashboard...
+              </p>
+            </>
+          )}
+        </div>
+
+        {/* Steps */}
+        <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:20, padding:'24px 28px', boxShadow:'0 4px 24px rgba(0,0,0,0.06)', textAlign:'left', marginBottom:32 }}>
+          {steps.map((step, i) => {
+            const isCompleted = completedSteps.includes(i)
+            const isActive = activeStep === i && !isCompleted
+            const isPending = !isCompleted && !isActive
+
+            return (
+              <div key={i} style={{
+                display:'flex', alignItems:'center', gap:14,
+                padding:'10px 0',
+                borderBottom: i < steps.length - 1 ? `1px solid ${C.border}` : 'none',
+                opacity: isPending ? 0.35 : 1,
+                transition: 'opacity 0.4s ease',
+                animation: isActive ? 'fadeInUp 0.3s ease' : 'none',
+              }}>
+                {/* Icon / spinner / check */}
+                <div style={{ width:32, height:32, borderRadius:10, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center',
+                  background: isCompleted ? 'rgba(4,120,87,0.1)' : isActive ? C.goldBg : C.bgAlt,
+                  border: `1px solid ${isCompleted ? 'rgba(4,120,87,0.25)' : isActive ? C.goldBorder : C.border}`,
+                  transition: 'all 0.3s ease',
+                }}>
+                  {isCompleted ? (
+                    <svg width="14" height="14" viewBox="0 0 10 10" fill="none">
+                      <polyline points="1.5,5 4,7.5 8.5,2.5" stroke="#047857" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  ) : isActive ? (
+                    <svg style={{ animation:'spin 0.8s linear infinite', width:14, height:14 }} fill="none" viewBox="0 0 24 24">
+                      <circle style={{ opacity:0.25 }} cx="12" cy="12" r="10" stroke={C.gold} strokeWidth="4"/>
+                      <path style={{ opacity:0.85 }} fill={C.gold} d="M4 12a8 8 0 018-8v8z"/>
+                    </svg>
+                  ) : (
+                    <span style={{ fontSize:14 }}>{step.icon}</span>
+                  )}
+                </div>
+
+                {/* Text */}
+                <span style={{
+                  fontSize:13, fontWeight: isActive ? 600 : 500,
+                  color: isCompleted ? '#047857' : isActive ? C.gold : C.textMid,
+                  transition: 'color 0.3s ease',
+                }}>
+                  {step.text}
+                </span>
+
+                {/* Done label */}
+                {isCompleted && (
+                  <span style={{ marginLeft:'auto', fontSize:11, color:'#047857', fontWeight:600 }}>Done</span>
+                )}
+                {isActive && (
+                  <span style={{ marginLeft:'auto', fontSize:11, color:C.gold, fontWeight:600 }}>Working...</span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Progress bar */}
+        <div style={{ height:5, background:C.bgAlt, borderRadius:4, overflow:'hidden', marginBottom:14 }}>
+          <div style={{
+            height:'100%',
+            width: `${Math.round(((completedSteps.length) / steps.length) * 100)}%`,
+            background:`linear-gradient(90deg, ${C.gold}, ${C.goldLight})`,
+            borderRadius:4,
+            transition:'width 0.6s ease',
+          }} />
+        </div>
+        <p style={{ fontSize:12, color:C.textLight }}>
+          {completedSteps.length} of {steps.length} steps complete
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export default function OnboardingPage() {
   const navigate = useNavigate()
   const { user, completeOnboarding } = useAuth()
@@ -76,6 +267,9 @@ export default function OnboardingPage() {
   const [goals, setGoals] = useState([])
   const [questions, setQuestions] = useState([])
   const [assessmentError, setAssessmentError] = useState('')
+
+  // Store roadmap result so we can navigate after the building screen finishes
+  const pendingNavRef = useRef(null)
 
   const totalQuestions = clarity === 'yes' ? 0 : clarity === 'maybe' ? 5 : 10
   const visibleQuestions = questions.slice(0, totalQuestions)
@@ -304,10 +498,8 @@ export default function OnboardingPage() {
       return
     }
 
-    // ── Last question submitted → generate roadmap ──
-    setLoadingMessage('Building your personalised 16-week roadmap...')
-    setLoadingSubMessage('Detecting your true level · Aligning with your syllabus · Creating 16 weeks of tasks')
-    setScreen('loading')
+    // ── Last question submitted → show building screen while generating ──
+    setScreen('building')
 
     try {
       const storedQuestions = window.__claripath_assessmentQuestions || []
@@ -321,7 +513,6 @@ export default function OnboardingPage() {
 
       const userId = user?.id || user?.userId || localStorage.getItem('userId') || 'guest'
 
-      // ── FIX: destructure safely with fallback defaults ──
       const result = await generateAndSaveRoadmap({
         userId,
         goalId:      confirmedGoal?.id        || confirmedGoal?.goalType || 'sde',
@@ -334,13 +525,13 @@ export default function OnboardingPage() {
         assessmentQnA,
       })
 
-      // ── FIX: guard against undefined result or levelData ──
       const roadmapId = result?.roadmapId ?? null
       const levelData = result?.levelData ?? {}
 
-      completeOnboarding()
-
-      navigate('/dashboard', {
+      // Do NOT call completeOnboarding() here — it triggers ProtectedRoute to redirect
+      // immediately, skipping the building screen animation. Call it in handleBuildingComplete.
+      pendingNavRef.current = {
+        pathname: '/dashboard',
         state: {
           freshRoadmap:  true,
           roadmapId,
@@ -354,17 +545,35 @@ export default function OnboardingPage() {
           hoursPerWeek,
           mode,
         }
-      })
+      }
 
     } catch (err) {
       console.error('[RoadmapGenerator] Failed:', err)
-      // Don't navigate — show error and let user retry
-      setLoadingMessage('Generation failed — please try again')
-      setLoadingSubMessage(err.message || 'Gemini was unavailable. Click below to retry.')
-      setScreen('assessment')
-      setCurrentQ(generatedQuestions.length - 1)
-      setCurrentAnswer(Object.values(assessAnswers).at(-1) || '')
-      setAssessmentError('⚠️ Roadmap generation failed: ' + (err.message || 'Please try again in a moment.'))
+      // Store fallback — building screen still finishes its animation then navigates
+      pendingNavRef.current = {
+        pathname: '/dashboard',
+        state: { freshRoadmap: true, error: err.message }
+      }
+    }
+  }
+
+  const handleBuildingComplete = () => {
+    // Animation done — NOW safe to complete onboarding and navigate
+    completeOnboarding()
+    if (pendingNavRef.current) {
+      navigate(pendingNavRef.current.pathname, { state: pendingNavRef.current.state })
+    } else {
+      // API still running — poll then navigate
+      const poll = (n) => {
+        if (pendingNavRef.current) {
+          navigate(pendingNavRef.current.pathname, { state: pendingNavRef.current.state })
+        } else if (n > 0) {
+          setTimeout(() => poll(n - 1), 800)
+        } else {
+          navigate('/dashboard')
+        }
+      }
+      poll(5)
     }
   }
 
@@ -389,7 +598,16 @@ export default function OnboardingPage() {
     .ob-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(180,83,9,0.35) !important; }
     .goal-card:hover { border-color: rgba(180,83,9,0.4) !important; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.08) !important; }
     textarea::placeholder, input::placeholder { color: #a8a29e; }
+    textarea, input { caret-color: #1c1917 !important; }
   `
+
+  // ── SCREEN: BUILDING ROADMAP ──
+  if (screen === 'building') return (
+    <BuildingRoadmapScreen
+      goalTitle={confirmedGoal?.title || 'your goal'}
+      onComplete={handleBuildingComplete}
+    />
+  )
 
   // ── SCREEN: WELCOME ──
   if (screen === 'welcome') return (
@@ -473,7 +691,6 @@ export default function OnboardingPage() {
         <h2 style={title}>Let's find your path</h2>
         <p style={subtitle}>Tell us a bit about yourself so we can build a roadmap made specifically for you.</p>
 
-        {/* Branch */}
         <div style={{ marginBottom: 22 }}>
           <label style={labelStyle}>What is your college branch?</label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -483,7 +700,6 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        {/* Semester */}
         <div style={{ marginBottom: 22 }}>
           <label style={labelStyle}>Which semester are you in?</label>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 6 }}>
@@ -493,7 +709,6 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        {/* Hours per week */}
         <div style={{ marginBottom: 22 }}>
           <label style={labelStyle}>How many hours per week can you dedicate to learning?</label>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
@@ -505,7 +720,6 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        {/* Mode */}
         <div style={{ marginBottom: 22 }}>
           <label style={labelStyle}>What is your primary goal right now?</label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -519,7 +733,6 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        {/* Other field */}
         <div style={{ marginBottom: 22 }}>
           <label style={labelStyle}>Are you interested in a different field?</label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
@@ -543,7 +756,6 @@ export default function OnboardingPage() {
           )}
         </div>
 
-        {/* Clarity */}
         <div style={{ marginBottom: 28 }}>
           <label style={labelStyle}>Do you know what career you want?</label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -829,9 +1041,9 @@ export default function OnboardingPage() {
     )
   }
 
-  // ── SCREEN: LOADING ──
+  // ── SCREEN: LOADING (analysis phase only — roadmap building uses 'building' screen) ──
   if (screen === 'loading') return (
-    <div style={{ ...pageBg, flexDirection: 'column', gap: 24 }}>
+    <div style={{ ...pageBg, flexDirection: 'column', gap: 24, cursor: 'default' }}>
       <style>{sharedStyle}</style>
       <BgDecor />
       <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24 }}>

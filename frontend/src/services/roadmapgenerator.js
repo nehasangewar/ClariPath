@@ -162,56 +162,108 @@ export async function generateAndSaveRoadmap({
   userId, goalId, goalTitle, branch, semester,
   hoursPerWeek, mode, whatYouKnow, assessmentQnA
 }) {
-  const syllabusContext = getSyllabusContext(branch, semester)
 
-  const userPrompt = buildRoadmapPrompt({
-    goalId, goalTitle, branch, semester,
-    hoursPerWeek, mode, whatYouKnow,
-    assessmentQnA, syllabusContext
-  })
-
-  const roadmap = await callGeminiJSON(SYSTEM, userPrompt)
-
-  if (!roadmap.phases || roadmap.phases.length !== 4) {
-    throw new Error('Roadmap generation failed: expected 4 phases in response.')
-  }
-
-  roadmap.phases = roadmap.phases.map((phase, pi) => ({
-    ...phase,
-    completion: 0,
-    weeks_data: phase.weeks_data.map((week, wi) => ({
-      ...week,
-      done: false,
-      current: pi === 0 && wi === 0
-    }))
-  }))
-
-  roadmap.generatedAt   = new Date().toISOString()
-  roadmap.semesterLabel = `Semester ${semester}`
-  roadmap.goal          = { id: goalId, title: goalTitle }
-  roadmap.branch        = branch
-  roadmap.hoursPerWeek  = hoursPerWeek
-  roadmap.mode          = mode
-
-  // ── Save to backend ──
-  const token = localStorage.getItem('token')
-  const saveRes = await fetch('http://localhost:8080/api/onboarding/generate-roadmap', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
+  const roadmap = {
+    studentSummary: {
+      trueLevel: "BEGINNER",
+      assessmentScore: 60,
+      topicsKnown: ["Basic programming concepts"],
+      topicsWeak: ["Problem solving", "Data structures"],
+      topicsSkipped: [],
+      honestyGap: "Student has basic familiarity but lacks depth in problem solving.",
+      strengthNote: "Shows interest in programming and willingness to learn.",
+      startPoint: "Begin with strengthening core programming and logical thinking."
     },
-    body: JSON.stringify({
-  userId,
-  branch,
-  semester,
-  college: null, // pass college here if you collect it during onboarding
-  roadmapJson: JSON.stringify(roadmap)
-})
-  })
 
-  if (!saveRes.ok) {
-    throw new Error('Failed to save roadmap to backend')
+    readinessTarget: "Aim for 60 readiness score by end of semester",
+
+    milestones: [
+      { week: 4, title: "Complete Programming Fundamentals", type: "Achievement" },
+      { week: 8, title: "Build First Console Project", type: "Project" },
+      { week: 12, title: "Solve 50 DSA Problems", type: "Achievement" },
+      { week: 16, title: "Build Mini Full Stack Project", type: "Project" }
+    ],
+
+    phases: [
+
+      {
+        id: 1,
+        phase: "Phase 1",
+        goal: "Strengthen core programming and logic building",
+        weeks: "1-4",
+        color: "#10b981",
+        completion: 0,
+        weeks_data: [
+          {
+            wk: 1,
+            focus: "Programming Basics (C / Java)",
+            done: false,
+            current: true,
+            syllabusLink: "Programming Fundamentals",
+            tasks: [
+              {
+                title: "Learn variables, loops, and conditions",
+                desc: "Understand core programming syntax and logic flow.",
+                resource: "CS50",
+                resourceUrl: "https://cs50.harvard.edu",
+                hours: 2,
+                difficulty: "EASY",
+                type: "learn",
+                tags: ["programming", "basics"]
+              },
+              {
+                title: "Solve beginner problems",
+                desc: "Practice simple problems to strengthen logical thinking.",
+                resource: "GeeksForGeeks",
+                resourceUrl: "https://geeksforgeeks.org",
+                hours: 2,
+                difficulty: "EASY",
+                type: "practice",
+                tags: ["logic"]
+              }
+            ]
+          }
+        ]
+      },
+
+      {
+        id: 2,
+        phase: "Phase 2",
+        goal: "Learn Data Structures",
+        weeks: "5-8",
+        color: "#b45309",
+        completion: 0,
+        weeks_data: []
+      },
+
+      {
+        id: 3,
+        phase: "Phase 3",
+        goal: "Problem Solving & DSA",
+        weeks: "9-12",
+        color: "#7c3aed",
+        completion: 0,
+        weeks_data: []
+      },
+
+      {
+        id: 4,
+        phase: "Phase 4",
+        goal: "Project Development",
+        weeks: "13-16",
+        color: "#1d4ed8",
+        completion: 0,
+        weeks_data: []
+      }
+
+    ],
+
+    generatedAt: new Date().toISOString(),
+    semesterLabel: `Semester ${semester}`,
+    goal: { id: goalId, title: goalTitle },
+    branch,
+    hoursPerWeek,
+    mode
   }
 
   return roadmap
